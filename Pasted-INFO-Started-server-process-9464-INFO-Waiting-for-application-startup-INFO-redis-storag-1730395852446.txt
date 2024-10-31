@@ -1,0 +1,23 @@
+INFO:     Started server process [9464]
+INFO:     Waiting for application startup.
+INFO:redis_storage:Starting cleanup task, scanning for pattern: video:*:metadata
+INFO:redis_manager:Cleaned up 0 expired sessions
+INFO:redis_manager:Cleaned up 0 expired cache entries
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:3000 (Press CTRL+C to quit)
+INFO:     172.31.196.19:46162 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.19:46162 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:     172.31.196.19:46162 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:app:Returning cached video history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.19:46174 - "GET /video_analysis_history HTTP/1.1" 200 OK
+ERROR:chatbot:Error sending message: 429 Resource has been exhausted (e.g. check quota).
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:     172.31.196.19:46174 - "POST /send_message HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:     172.31.196.19:46174 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:app:Returning cached video history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.19:53350 - "GET /video_analysis_history HTTP/1.1" 200 

@@ -227,7 +227,9 @@ class Chatbot:
             return response_text
         except Exception as e:
             logger.error(f"Error sending message: {str(e)}")
-            return "I apologize, but there was an error processing your request. Please try again."
+            if "429" in str(e) or "quota" in str(e).lower():
+                return "I apologize, but the API quota has been exceeded. Please try again in a few minutes."
+            return "I apologize, but there was an unexpected error. Please try again."
 
     def _create_analysis_prompt(self, filename: str, metadata: Optional[Dict]) -> str:
         """Create the analysis prompt with proper context"""
