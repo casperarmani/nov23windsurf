@@ -15,7 +15,7 @@ class RedisFileStorage:
     def __init__(self, redis_url: str, chunk_size: int = 1024 * 1024):  # 1MB chunks
         self.redis_client = redis.from_url(redis_url)
         self.chunk_size = chunk_size
-        self.max_file_size = 25 * 1024 * 1024  # 25MB
+        self.max_file_size = 50 * 1024 * 1024  # 50MB
         self.compression_threshold = 10 * 1024 * 1024  # 10MB
         self.ttl = 3600  # 1 hour
         self.video_prefix = "video:"
