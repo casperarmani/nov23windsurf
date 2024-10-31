@@ -54,7 +54,7 @@ class Chatbot:
         }
         
         self.model = genai.GenerativeModel(
-            model_name="models/gemini-1.5-pro-exp-0827",
+            model_name="models/gemini-1.5-pro-002",
             generation_config=self.generation_config,
             safety_settings=safety_settings
         )
