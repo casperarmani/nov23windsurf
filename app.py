@@ -174,23 +174,147 @@ async def login_page(request: Request):
     """Login page route"""
     return templates.TemplateResponse("login.html", {"request": request})
 
+@app.post('/login')
+async def login_post(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    response: Response = None
+):
+    """Handle login POST request"""
+    try:
+        # Rate limiting check
+        if not redis_manager.check_rate_limit("login", request.client.host):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many login attempts. Please try again later."
+            )
+
+        # Authenticate with Supabase
+        auth_response = await supabase.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+
+        if not auth_response.user:
+            logger.error("Login failed: No user in response")
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": "Invalid credentials"}
+            )
+
+        # Get user details
+        user = await get_user_by_email(email)
+        if not user:
+            user = await create_user(email)
+
+        # Create session
+        session_id = secrets.token_urlsafe(32)
+        session_data = {
+            "id": str(user.get("id")),
+            "email": email,
+            "last_refresh": time.time()
+        }
+
+        if not redis_manager.set_session(session_id, session_data):
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create session"
+            )
+
+        response = JSONResponse(content={"success": True, "message": "Login successful"})
+        response.set_cookie(
+            key="session_id",
+            value=session_id,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=3600
+        )
+        return response
+
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": str(e)}
+        )
+
 @app.get('/signup', response_class=HTMLResponse)
 async def signup_page(request: Request):
     """Signup page route"""
     return templates.TemplateResponse("signup.html", {"request": request})
 
+@app.post('/signup')
+async def signup_post(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...)
+):
+    """Handle signup POST request"""
+    try:
+        # Rate limiting check
+        if not redis_manager.check_rate_limit("signup", request.client.host):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many signup attempts. Please try again later."
+            )
+
+        # Create user in Supabase
+        auth_response = await supabase.auth.sign_up({
+            "email": email,
+            "password": password
+        })
+
+        if not auth_response.user:
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": "Failed to create user"}
+            )
+
+        # Create user in our database
+        user = await create_user(email)
+
+        return JSONResponse(
+            content={
+                "success": True,
+                "message": "Signup successful. Please check your email for verification."
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Signup error: {str(e)}")
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": str(e)}
+        )
+
 @app.post('/logout')
-async def logout(request: Request, response: Response):
+async def logout(request: Request):
     """Handle user logout by removing session"""
     session_id = request.cookies.get('session_id')
     if session_id:
-        try:
-            await redis_manager.delete_session(session_id)
-        except Exception as e:
-            logger.error(f"Error during logout: {str(e)}")
-        finally:
-            response.delete_cookie(key="session_id")
-    return {"success": True, "message": "Logout successful"}
+        redis_manager.delete_session(session_id)
+    
+    response = JSONResponse(content={"success": True, "message": "Logout successful"})
+    response.delete_cookie(key="session_id")
+    return response
+
+@app.get('/auth_status')
+async def auth_status(request: Request):
+    """Check authentication status"""
+    try:
+        user = await get_current_user(request, return_none=True)
+        return JSONResponse(content={
+            "authenticated": user is not None,
+            "user": user if user else None
+        })
+    except Exception as e:
+        logger.error(f"Auth status error: {str(e)}")
+        return JSONResponse(content={
+            "authenticated": False,
+            "error": str(e)
+        })
 
 @app.get("/health")
 async def health_check():
