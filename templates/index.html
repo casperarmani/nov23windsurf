@@ -131,7 +131,7 @@
                 const historyContainer = document.getElementById('chat-history');
                 historyContainer.innerHTML = data.history.map(item => `
                     <div class="chat-history-item">
-                        <small class="text-muted">${new Date(item.timestamp).toLocaleString()}</small>
+                        <small class="text-muted">${new Date(item.timestamp).toISOString().replace('T', ' ').slice(0, 19)}</small>
                         <div class="mt-1">${item.message}</div>
                     </div>
                 `).join('');
@@ -147,7 +147,7 @@
                 const historyContainer = document.getElementById('video-history');
                 historyContainer.innerHTML = data.history.map(item => `
                     <div class="video-analysis-item">
-                        <small class="text-muted">${new Date(item.timestamp).toLocaleString()}</small>
+                        <small class="text-muted">${new Date(item.timestamp).toISOString().replace('T', ' ').slice(0, 19)}</small>
                         <div class="mt-1">
                             <strong>${item.upload_file_name}</strong>
                             ${item.video_duration ? `<br>Duration: ${item.video_duration}` : ''}
