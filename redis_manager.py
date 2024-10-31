@@ -68,6 +68,19 @@ class RedisManager:
             logger.error(f"Unexpected error during deserialization: {e}")
             return None
 
+    def check_rate_limit(self, user_id: str, ip_address: str) -> bool:
+        """Check if the request is within rate limits"""
+        key = f"{self.rate_prefix}{user_id}:{ip_address}"
+        current = self.redis.get(key)
+        if current is None:
+            self.redis.set(key, 1, ex=self.rate_limit_ttl)
+            return True
+        count = int(current)
+        if count >= self.rate_limit_requests:
+            return False
+        self.redis.incr(key)
+        return True
+
     # Session Management
     def set_session(self, session_id: str, data: Dict, ttl: Optional[int] = None) -> bool:
         """Store session data in Redis"""
