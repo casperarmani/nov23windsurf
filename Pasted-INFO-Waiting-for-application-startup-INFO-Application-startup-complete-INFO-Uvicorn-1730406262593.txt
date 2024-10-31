@@ -1,0 +1,27 @@
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:3000 (Press CTRL+C to quit)
+INFO:     172.31.196.23:35504 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.23:35504 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:     172.31.196.23:35504 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:     172.31.196.23:35508 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:     172.31.196.23:52870 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.23:52870 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:app:Returning cached chat history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.23:52870 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:app:Returning cached video history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.23:52874 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:     172.31.196.23:34154 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:     172.31.196.23:50222 - "POST /send_message HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:     172.31.196.23:50222 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:     172.31.196.23:46576 - "GET /video_analysis_history HTTP/1.1" 200 OK
+ERROR:app:Error processing message: 'RedisManager' object has no attribute 'TaskType'
+INFO:     172.31.196.23:40766 - "POST /send_message HTTP/1.1" 500 Internal Server Error

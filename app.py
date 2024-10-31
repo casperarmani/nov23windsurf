@@ -22,7 +22,7 @@ import time
 import jwt
 from fastapi.responses import Response
 from redis_storage import RedisFileStorage
-from redis_manager import RedisManager
+from redis_manager import RedisManager, TaskType, TaskPriority
 import asyncio
 import secrets
 import httpx
@@ -338,13 +338,13 @@ async def send_message(
                 
                 # Add video processing task to queue
                 task_id = redis_manager.enqueue_task(
-                    task_type=redis_manager.TaskType.VIDEO_PROCESSING,
+                    task_type=TaskType.VIDEO_PROCESSING,
                     payload={
                         "file_id": file_id,
                         "filename": video.filename,
                         "user_id": user["id"]
                     },
-                    priority=redis_manager.TaskPriority.HIGH
+                    priority=TaskPriority.HIGH
                 )
                 
                 if await redis_storage.store_file(file_id, content):
@@ -355,14 +355,14 @@ async def send_message(
                     
                     # Add video analysis task to queue
                     analysis_task_id = redis_manager.enqueue_task(
-                        task_type=redis_manager.TaskType.VIDEO_ANALYSIS,
+                        task_type=TaskType.VIDEO_ANALYSIS,
                         payload={
                             "file_id": file_id,
                             "analysis": analysis_text,
                             "metadata": metadata,
                             "user_id": user["id"]
                         },
-                        priority=redis_manager.TaskPriority.MEDIUM
+                        priority=TaskPriority.MEDIUM
                     )
                     
                     await insert_video_analysis(
