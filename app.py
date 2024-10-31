@@ -27,7 +27,6 @@ import asyncio
 import secrets
 import httpx
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -94,7 +93,6 @@ async def count_requests(request: Request, call_next):
 async def startup_event():
     """Initialize application state and start background tasks"""
     app.state.start_time = time.time()
-    # Start background cleanup task
     asyncio.create_task(cleanup_background())
 
 async def cleanup_background():
@@ -103,7 +101,7 @@ async def cleanup_background():
         await redis_storage.cleanup_expired_files()
         await redis_manager.cleanup_expired_sessions()
         await redis_manager.cleanup_expired_cache()
-        await asyncio.sleep(300)  # Run every 5 minutes
+        await asyncio.sleep(300)
 
 async def refresh_jwt_token():
     """Refresh the JWT token using Supabase refresh token"""
@@ -131,14 +129,13 @@ async def get_current_user(request: Request, return_none=False):
                 return None
             raise HTTPException(status_code=401, detail="Not authenticated")
 
-        # Ensure session has required fields
         if not isinstance(session_data, dict) or 'id' not in session_data:
             if return_none:
                 return None
             raise HTTPException(status_code=401, detail="Invalid session data")
 
         last_refresh = session_data.get('last_refresh', 0)
-        if time.time() - last_refresh > 3000:  # 50 minutes
+        if time.time() - last_refresh > 3000:
             try:
                 refresh_success = await refresh_jwt_token()
                 if refresh_success:
@@ -183,15 +180,13 @@ async def login_post(
 ):
     """Handle login POST request"""
     try:
-        # Rate limiting check
         if not redis_manager.check_rate_limit("login", request.client.host):
             raise HTTPException(
                 status_code=429,
                 detail="Too many login attempts. Please try again later."
             )
 
-        # Authenticate with Supabase
-        auth_response = await supabase.auth.sign_in_with_password({
+        auth_response = supabase.auth.sign_in_with_password({
             "email": email,
             "password": password
         })
@@ -203,12 +198,10 @@ async def login_post(
                 content={"success": False, "message": "Invalid credentials"}
             )
 
-        # Get user details
         user = await get_user_by_email(email)
         if not user:
             user = await create_user(email)
 
-        # Create session
         session_id = secrets.token_urlsafe(32)
         session_data = {
             "id": str(user.get("id")),
@@ -253,14 +246,12 @@ async def signup_post(
 ):
     """Handle signup POST request"""
     try:
-        # Rate limiting check
         if not redis_manager.check_rate_limit("signup", request.client.host):
             raise HTTPException(
                 status_code=429,
                 detail="Too many signup attempts. Please try again later."
             )
 
-        # Create user in Supabase
         auth_response = await supabase.auth.sign_up({
             "email": email,
             "password": password
@@ -272,7 +263,6 @@ async def signup_post(
                 content={"success": False, "message": "Failed to create user"}
             )
 
-        # Create user in our database
         user = await create_user(email)
 
         return JSONResponse(
@@ -315,6 +305,42 @@ async def auth_status(request: Request):
             "authenticated": False,
             "error": str(e)
         })
+
+@app.get("/chat_history")
+async def get_chat_history_endpoint(request: Request):
+    """Get chat history for the current user"""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(content={"history": []})
+    
+    cache_key = f"chat_history:{user['id']}"
+    cached_history = redis_manager.get_cache(cache_key)
+    
+    if cached_history:
+        logger.info(f"Returning cached chat history for user {user['id']}")
+        return JSONResponse(content={"history": cached_history})
+        
+    history = await get_chat_history(uuid.UUID(user['id']))
+    redis_manager.set_cache(cache_key, history)
+    return JSONResponse(content={"history": history})
+
+@app.get("/video_analysis_history")
+async def get_video_analysis_history_endpoint(request: Request):
+    """Get video analysis history for the current user"""
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(content={"history": []})
+    
+    cache_key = f"video_history:{user['id']}"
+    cached_history = redis_manager.get_cache(cache_key)
+    
+    if cached_history:
+        logger.info(f"Returning cached video history for user {user['id']}")
+        return JSONResponse(content={"history": cached_history})
+        
+    history = await get_video_analysis_history(uuid.UUID(user['id']))
+    redis_manager.set_cache(cache_key, history)
+    return JSONResponse(content={"history": history})
 
 @app.get("/health")
 async def health_check():
