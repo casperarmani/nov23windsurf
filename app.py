@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -27,14 +27,7 @@ import asyncio
 import secrets
 import httpx
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('app.log')
-    ]
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -80,36 +73,6 @@ app.add_middleware(
     allowed_hosts=["*"]
 )
 
-@app.middleware("http")
-async def count_requests(request: Request, call_next):
-    if not hasattr(app.state, "request_count"):
-        app.state.request_count = 0
-    app.state.request_count += 1
-    response = await call_next(request)
-    return response
-
-@app.on_event("startup")
-async def startup_event():
-    app.state.start_time = time.time()
-    asyncio.create_task(cleanup_background())
-
-async def cleanup_background():
-    while True:
-        await redis_storage.cleanup_expired_files()
-        await redis_manager.cleanup_expired_sessions()
-        await redis_manager.cleanup_expired_cache()
-        await asyncio.sleep(300)
-
-async def refresh_jwt_token():
-    try:
-        refresh_response = await supabase.auth.refresh_session()
-        if refresh_response and hasattr(refresh_response, 'session') and refresh_response.session:
-            return True
-        return False
-    except Exception as e:
-        logger.error(f"Error refreshing token: {str(e)}")
-        return False
-
 async def get_current_user(request: Request, return_none=False):
     try:
         session_id = request.cookies.get('session_id')
@@ -129,29 +92,55 @@ async def get_current_user(request: Request, return_none=False):
                 return None
             raise HTTPException(status_code=401, detail="Invalid session data")
 
-        last_refresh = session_data.get('last_refresh', 0)
-        if time.time() - last_refresh > 3000:
-            try:
-                refresh_success = await refresh_jwt_token()
-                if refresh_success:
-                    session_data['last_refresh'] = time.time()
-                    redis_manager.set_session(session_id, session_data)
-                else:
-                    if return_none:
-                        return None
-                    raise HTTPException(status_code=401, detail="Session expired")
-            except Exception as e:
-                logger.error(f"Token refresh error: {str(e)}")
-                if return_none:
-                    return None
-                raise HTTPException(status_code=401, detail="Session expired")
-
         return session_data
     except Exception as e:
         logger.error(f"Error in get_current_user: {str(e)}")
         if return_none:
             return None
         raise HTTPException(status_code=401, detail="Authentication error")
+
+@app.get('/auth_status')
+async def auth_status(request: Request):
+    try:
+        session_id = request.cookies.get('session_id')
+        if not session_id:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": False,
+                    "message": "No session found"
+                }
+            )
+
+        # Refresh session if it exists
+        if await redis_manager.refresh_session(session_id):
+            user = await get_current_user(request, return_none=True)
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": user is not None,
+                    "user": user if user else None,
+                    "session_status": "active"
+                }
+            )
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": False,
+                    "message": "Session expired or invalid"
+                }
+            )
+    except Exception as e:
+        logger.error(f"Auth status error: {str(e)}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "authenticated": False,
+                "error": str(e),
+                "session_status": "error"
+            }
+        )
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -225,50 +214,6 @@ async def login_post(
             content={"success": False, "message": str(e)}
         )
 
-@app.get('/signup', response_class=HTMLResponse)
-async def signup_page(request: Request):
-    return templates.TemplateResponse("signup.html", {"request": request})
-
-@app.post('/signup')
-async def signup_post(
-    request: Request,
-    email: str = Form(...),
-    password: str = Form(...)
-):
-    try:
-        if not redis_manager.check_rate_limit("signup", request.client.host):
-            raise HTTPException(
-                status_code=429,
-                detail="Too many signup attempts. Please try again later."
-            )
-
-        auth_response = await supabase.auth.sign_up({
-            "email": email,
-            "password": password
-        })
-
-        if not auth_response.user:
-            return JSONResponse(
-                status_code=400,
-                content={"success": False, "message": "Failed to create user"}
-            )
-
-        user = await create_user(email)
-
-        return JSONResponse(
-            content={
-                "success": True,
-                "message": "Signup successful. Please check your email for verification."
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Signup error: {str(e)}")
-        return JSONResponse(
-            status_code=400,
-            content={"success": False, "message": str(e)}
-        )
-
 @app.post('/logout')
 async def logout(request: Request):
     session_id = request.cookies.get('session_id')
@@ -278,21 +223,6 @@ async def logout(request: Request):
     response = JSONResponse(content={"success": True, "message": "Logout successful"})
     response.delete_cookie(key="session_id")
     return response
-
-@app.get('/auth_status')
-async def auth_status(request: Request):
-    try:
-        user = await get_current_user(request, return_none=True)
-        return JSONResponse(content={
-            "authenticated": user is not None,
-            "user": user if user else None
-        })
-    except Exception as e:
-        logger.error(f"Auth status error: {str(e)}")
-        return JSONResponse(content={
-            "authenticated": False,
-            "error": str(e)
-        })
 
 @app.get("/chat_history")
 async def get_chat_history_endpoint(request: Request):
@@ -334,31 +264,13 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "services": {
-            "redis": {
-                "status": "unknown",
-                "details": None
-            },
+            "redis": await redis_manager.health_check(),
             "supabase": {
                 "status": "unknown",
                 "details": None
             }
         }
     }
-    
-    try:
-        redis_health = await redis_manager.check_health()
-        health_status["services"]["redis"] = {
-            "status": redis_health["status"],
-            "details": redis_health
-        }
-        if redis_health["status"] != "healthy":
-            health_status["status"] = "degraded"
-    except Exception as e:
-        health_status["services"]["redis"] = {
-            "status": "unhealthy",
-            "details": {"error": str(e)}
-        }
-        health_status["status"] = "unhealthy"
     
     try:
         async with httpx.AsyncClient() as client:
@@ -424,10 +336,33 @@ async def send_message(
                 content = await video.read()
                 file_id = str(uuid.uuid4())
                 
+                # Add video processing task to queue
+                task_id = redis_manager.enqueue_task(
+                    task_type=redis_manager.TaskType.VIDEO_PROCESSING,
+                    payload={
+                        "file_id": file_id,
+                        "filename": video.filename,
+                        "user_id": user["id"]
+                    },
+                    priority=redis_manager.TaskPriority.HIGH
+                )
+                
                 if await redis_storage.store_file(file_id, content):
                     analysis_text, metadata = await chatbot.analyze_video(
                         file_id=file_id,
                         filename=video.filename
+                    )
+                    
+                    # Add video analysis task to queue
+                    analysis_task_id = redis_manager.enqueue_task(
+                        task_type=redis_manager.TaskType.VIDEO_ANALYSIS,
+                        payload={
+                            "file_id": file_id,
+                            "analysis": analysis_text,
+                            "metadata": metadata,
+                            "user_id": user["id"]
+                        },
+                        priority=redis_manager.TaskPriority.MEDIUM
                     )
                     
                     await insert_video_analysis(
