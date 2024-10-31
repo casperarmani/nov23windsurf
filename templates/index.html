@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Analysis Chatbot</title>
+    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Video Analysis Chatbot</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item" id="login-link">
+                        <a class="nav-link" href="/login">Login</a>
+                    </li>
+                    <li class="nav-item" id="signup-link">
+                        <a class="nav-link" href="/signup">Sign Up</a>
+                    </li>
+                    <li class="nav-item d-none" id="logout-button">
+                        <button class="btn btn-link nav-link" onclick="logout()">Logout</button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        <div class="row">
+            <div class="col-md-8">
+                <div id="chat-container" class="mb-4 overflow-auto" style="max-height: 400px;">
+                    <!-- Chat messages will be displayed here -->
+                </div>
+
+                <form id="chat-form" class="mb-4">
+                    <div class="mb-3">
+                        <label for="message" class="form-label">Message</label>
+                        <textarea class="form-control" id="message" rows="3" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="video" class="form-label">Upload Video (Optional)</label>
+                        <input type="file" class="form-control" id="video" accept="video/*" multiple>
+                        <div id="upload-info" class="mt-2">
+                            <!-- Upload information will be displayed here -->
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Send</button>
+                </form>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Chat History</h5>
+                    </div>
+                    <div class="card-body" id="chat-history">
+                        <!-- Chat history will be displayed here -->
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Video Analysis History</h5>
+                    </div>
+                    <div class="card-body" id="video-history">
+                        <!-- Video analysis history will be displayed here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let isAuthenticated = false;
+
+        // Check authentication status on page load
+        async function checkAuth() {
+            try {
+                const response = await fetch('/auth_status');
+                const data = await response.json();
+                isAuthenticated = data.authenticated;
+                updateUI(data);
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+            }
+        }
+
+        function updateUI(authData) {
+            const loginLink = document.getElementById('login-link');
+            const signupLink = document.getElementById('signup-link');
+            const logoutButton = document.getElementById('logout-button');
+            const chatForm = document.getElementById('chat-form');
+
+            if (authData.authenticated) {
+                loginLink.classList.add('d-none');
+                signupLink.classList.add('d-none');
+                logoutButton.classList.remove('d-none');
+                chatForm.classList.remove('d-none');
+                loadChatHistory();
+                loadVideoHistory();
+            } else {
+                loginLink.classList.remove('d-none');
+                signupLink.classList.remove('d-none');
+                logoutButton.classList.add('d-none');
+                chatForm.classList.add('d-none');
+            }
+        }
+
+        async function logout() {
+            try {
+                const response = await fetch('/logout', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    location.reload();
+                }
+            } catch (error) {
+                console.error('Error during logout:', error);
+            }
+        }
+
+        async function loadChatHistory() {
+            try {
+                const response = await fetch('/chat_history');
+                const data = await response.json();
+                const historyContainer = document.getElementById('chat-history');
+                historyContainer.innerHTML = data.history.map(item => `
+                    <div class="chat-history-item">
+                        <small class="text-muted">${new Date(item.timestamp).toLocaleString()}</small>
+                        <div class="mt-1">${item.message}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading chat history:', error);
+            }
+        }
+
+        async function loadVideoHistory() {
+            try {
+                const response = await fetch('/video_analysis_history');
+                const data = await response.json();
+                const historyContainer = document.getElementById('video-history');
+                historyContainer.innerHTML = data.history.map(item => `
+                    <div class="video-analysis-item">
+                        <small class="text-muted">${new Date(item.timestamp).toLocaleString()}</small>
+                        <div class="mt-1">
+                            <strong>${item.upload_file_name}</strong>
+                            ${item.video_duration ? `<br>Duration: ${item.video_duration}` : ''}
+                            <div class="mt-2">${item.analysis}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading video history:', error);
+            }
+        }
+
+        document.getElementById('chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const messageInput = form.querySelector('#message');
+            const videoInput = form.querySelector('#video');
+            const formData = new FormData();
+
+            formData.append('message', messageInput.value);
+            for (const file of videoInput.files) {
+                formData.append('videos', file);
+            }
+
+            form.classList.add('loading');
+            try {
+                const response = await fetch('/send_message', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                const chatContainer = document.getElementById('chat-container');
+                chatContainer.innerHTML += `
+                    <div class="chat-message user">
+                        <strong>You:</strong> ${messageInput.value}
+                    </div>
+                    <div class="chat-message bot">
+                        <strong>Bot:</strong> ${data.response}
+                    </div>
+                `;
+                
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                messageInput.value = '';
+                videoInput.value = '';
+                document.getElementById('upload-info').innerHTML = '';
+                
+                loadChatHistory();
+                loadVideoHistory();
+            } catch (error) {
+                console.error('Error sending message:', error);
+                const chatContainer = document.getElementById('chat-container');
+                chatContainer.innerHTML += `
+                    <div class="chat-message error">
+                        Error: Failed to send message. Please try again.
+                    </div>
+                `;
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            } finally {
+                form.classList.remove('loading');
+            }
+        });
+
+        document.getElementById('video').addEventListener('change', (e) => {
+            const files = e.target.files;
+            const infoContainer = document.getElementById('upload-info');
+            const maxSize = 25 * 1024 * 1024; // 25MB
+            
+            let html = '<ul>';
+            for (const file of files) {
+                const isValid = file.size <= maxSize;
+                html += `
+                    <li class="${isValid ? '' : 'text-danger'}">
+                        ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)
+                        ${!isValid ? ' - File too large (max 25MB)' : ''}
+                    </li>
+                `;
+            }
+            html += '</ul>';
+            infoContainer.innerHTML = html;
+        });
+
+        // Initialize
+        checkAuth();
+    </script>
+</body>
+</html>
