@@ -1,0 +1,58 @@
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:3000 (Press CTRL+C to quit)
+INFO:     172.31.196.23:40982 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.23:40982 - "GET / HTTP/1.1" 302 Found
+INFO:     172.31.196.23:40982 - "GET /login HTTP/1.1" 200 OK
+INFO:     172.31.196.23:40982 - "GET /styles.css HTTP/1.1" 200 OK
+INFO:     172.31.196.23:40982 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:     172.31.196.23:40982 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:app:Returning cached chat history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.23:40988 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:     172.31.196.23:35534 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.23:35534 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:app:Returning cached chat history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.23:35534 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:app:Returning cached video history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.23:35538 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:     172.31.196.23:41906 - "POST /send_message HTTP/1.1" 200 OK
+INFO:app:Returning cached video history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.23:41906 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:     172.31.196.23:57838 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:redis_manager:Task 15498812016641262889 enqueued successfully
+INFO:redis_storage:Creating 1 chunks for video efabc892-d225-40f6-9547-17fa2704b6c1
+INFO:redis_storage:Storing video metadata with key: video:efabc892-d225-40f6-9547-17fa2704b6c1:metadata
+INFO:redis_storage:Set TTL 3600 seconds for key: video:efabc892-d225-40f6-9547-17fa2704b6c1:metadata
+INFO:redis_storage:Storing chunk 0 with key: video:efabc892-d225-40f6-9547-17fa2704b6c1:chunk:0
+INFO:chatbot:Retrieving video content for file ID: efabc892-d225-40f6-9547-17fa2704b6c1
+INFO:redis_storage:Retrieving video metadata from key: video:efabc892-d225-40f6-9547-17fa2704b6c1:metadata
+INFO:redis_storage:Found 1 chunks for video efabc892-d225-40f6-9547-17fa2704b6c1
+INFO:redis_storage:Retrieving chunk 0 from key: video:efabc892-d225-40f6-9547-17fa2704b6c1:chunk:0
+INFO:chatbot:Uploading video file: /tmp/tmpsu31wc2w.mp4
+INFO:chatbot:Waiting for video processing...
+INFO:redis_manager:Task 12967342793515634195 enqueued successfully
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:     172.31.196.23:46070 - "POST /send_message HTTP/1.1" 200 OK
+INFO:app:Returning cached video history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.23:46070 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:     172.31.196.23:56814 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/users?select=id&id=eq.e5fb9299-3a16-4453-9586-2735c521d843 "HTTP/1.1 200 OK"
+INFO:httpx:HTTP Request: POST https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history "HTTP/1.1 201 Created"
+INFO:     172.31.196.23:33728 - "POST /send_message HTTP/1.1" 200 OK
+INFO:app:Returning cached video history for user e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.23:33728 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:     172.31.196.23:33734 - "GET /chat_history HTTP/1.1" 200 OK
