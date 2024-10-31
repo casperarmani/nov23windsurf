@@ -15,14 +15,16 @@ import uvicorn
 from supabase.client import create_client, Client
 import uuid
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 import time
+import jwt
 from fastapi.responses import Response
 from redis_storage import RedisFileStorage
 from redis_manager import RedisManager
 import asyncio
 import secrets
+import httpx
 
 logging.basicConfig(
     level=logging.INFO,
@@ -60,9 +62,7 @@ app = FastAPI(
 )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 templates = Jinja2Templates(directory="templates")
-
 chatbot = Chatbot()
 
 app.add_middleware(
@@ -74,13 +74,24 @@ app.add_middleware(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
-
 app.add_middleware(
     TrustedHostMiddleware,
     allowed_hosts=["*"]
 )
 
+async def refresh_jwt_token():
+    """Refresh the JWT token using Supabase refresh token"""
+    try:
+        refresh_response = await supabase.auth.refresh_session()
+        if refresh_response and refresh_response.session:
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Error refreshing token: {str(e)}")
+        return False
+
 def get_current_user(request: Request, return_none=False):
+    """Get current user with token refresh logic"""
     session_id = request.cookies.get('session_id')
     if not session_id:
         if return_none:
@@ -88,8 +99,29 @@ def get_current_user(request: Request, return_none=False):
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     session_data = redis_manager.get_session(session_id)
-    if not session_data and not return_none:
+    if not session_data:
+        if return_none:
+            return None
         raise HTTPException(status_code=401, detail="Not authenticated")
+
+    # Check if access token needs refresh (every 50 minutes)
+    last_refresh = session_data.get('last_refresh', 0)
+    if time.time() - last_refresh > 3000:  # 50 minutes
+        try:
+            refresh_success = asyncio.run(refresh_jwt_token())
+            if refresh_success:
+                session_data['last_refresh'] = time.time()
+                redis_manager.set_session(session_id, session_data)
+            else:
+                if return_none:
+                    return None
+                raise HTTPException(status_code=401, detail="Session expired")
+        except Exception as e:
+            logger.error(f"Token refresh error: {str(e)}")
+            if return_none:
+                return None
+            raise HTTPException(status_code=401, detail="Session expired")
+
     return session_data
 
 async def cleanup_background():
@@ -197,6 +229,24 @@ async def send_message(
         await insert_chat_message(user_id, response, 'bot')
         return {"response": response}
 
+@app.post('/refresh_token')
+async def refresh_token(request: Request):
+    """Endpoint to refresh the JWT token"""
+    try:
+        success = await refresh_jwt_token()
+        if success:
+            return {"success": True, "message": "Token refreshed successfully"}
+        return JSONResponse(
+            status_code=401,
+            content={"success": False, "message": "Failed to refresh token"}
+        )
+    except Exception as e:
+        logger.error(f"Token refresh error: {str(e)}")
+        return JSONResponse(
+            status_code=401,
+            content={"success": False, "message": str(e)}
+        )
+
 @app.post('/login')
 async def login_post(request: Request, response: Response, email: str = Form(...), password: str = Form(...)):
     if not redis_manager.check_rate_limit("anonymous", request.client.host):
@@ -212,6 +262,7 @@ async def login_post(request: Request, response: Response, email: str = Form(...
             session_data = {
                 'id': str(db_user['id']),
                 'email': user.email,
+                'last_refresh': time.time()
             }
             
             if redis_manager.set_session(session_id, session_data):
@@ -247,6 +298,7 @@ async def signup_post(request: Request, response: Response, email: str = Form(..
             session_data = {
                 'id': str(db_user['id']),
                 'email': user.email,
+                'last_refresh': time.time()
             }
             
             if redis_manager.set_session(session_id, session_data):
