@@ -18,6 +18,16 @@
                     </button>
                 </div>
                 <h1 class="mb-4">Video Analysis Chatbot</h1>
+                <!-- Add toast container for notifications -->
+                <div class="toast-container position-fixed top-0 end-0 p-3">
+                    <div id="errorToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="toast-header bg-danger text-white">
+                            <strong class="me-auto">Error</strong>
+                            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                        <div class="toast-body"></div>
+                    </div>
+                </div>
                 <div id="chat-container" class="mb-4" style="max-height: 400px; overflow-y: auto;">
                     <!-- Chat messages will appear here -->
                 </div>
@@ -54,9 +64,22 @@
     </div>
 
     <script>
+        // Toast initialization
+        const errorToast = document.getElementById('errorToast');
+        const toast = new bootstrap.Toast(errorToast);
+
+        function showError(message) {
+            errorToast.querySelector('.toast-body').textContent = message;
+            toast.show();
+            console.error(message);
+        }
+
         // Session management and API request handling
         let isRefreshing = false;
         let failedQueue = [];
+        let retryCount = 0;
+        const MAX_RETRIES = 3;
+        const RETRY_DELAY = 1000; // 1 second
 
         function processQueue(error, token = null) {
             failedQueue.forEach(prom => {
@@ -75,12 +98,22 @@
                     method: 'POST',
                     credentials: 'include'
                 });
+                
                 if (!response.ok) {
-                    throw new Error('Token refresh failed');
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.message || 'Token refresh failed');
                 }
+                
+                retryCount = 0;
                 return await response.json();
             } catch (error) {
                 console.error('Error refreshing token:', error);
+                if (retryCount < MAX_RETRIES) {
+                    retryCount++;
+                    await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * retryCount));
+                    return refreshToken();
+                }
+                showError('Session expired. Please log in again.');
                 throw error;
             }
         }
@@ -99,7 +132,6 @@
                             await refreshToken();
                             isRefreshing = false;
                             processQueue(null);
-                            // Retry the original request
                             return await fetch(url, {
                                 ...options,
                                 credentials: 'include'
@@ -111,7 +143,6 @@
                             throw error;
                         }
                     } else {
-                        // Wait for the token refresh
                         return new Promise((resolve, reject) => {
                             failedQueue.push({ resolve, reject });
                         }).then(() => {
@@ -121,38 +152,72 @@
                             });
                         });
                     }
+                } else if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
                 }
                 return response;
             } catch (error) {
                 console.error('API request error:', error);
+                showError('Failed to complete request. Please try again.');
                 throw error;
             }
         }
 
-        // Session keepalive
+        // Session keepalive with error handling
         function startSessionKeepalive() {
+            let failedPings = 0;
+            const MAX_FAILED_PINGS = 3;
+
             setInterval(async () => {
                 try {
                     const response = await handleApiRequest('/auth_status');
-                    if (!response.ok) {
-                        console.error('Session keepalive failed');
+                    if (response.ok) {
+                        failedPings = 0;
+                    } else {
+                        failedPings++;
+                        console.warn(`Session keepalive failed (${failedPings}/${MAX_FAILED_PINGS})`);
+                        
+                        if (failedPings >= MAX_FAILED_PINGS) {
+                            showError('Lost connection to server. Please refresh the page.');
+                        }
                     }
                 } catch (error) {
+                    failedPings++;
                     console.error('Session keepalive error:', error);
+                    
+                    if (failedPings >= MAX_FAILED_PINGS) {
+                        showError('Connection lost. Please refresh the page.');
+                    }
                 }
             }, 300000); // Ping every 5 minutes
         }
 
-        // File validation
+        // File validation with improved error handling
         const VALID_VIDEO_TYPES = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo'];
+        const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB
         
         function validateFile(file) {
-            return {
+            const errors = [];
+            const fileInfo = {
                 name: file.name,
                 type: file.type,
                 size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
-                isValidType: VALID_VIDEO_TYPES.includes(file.type)
+                isValid: true
             };
+
+            if (!VALID_VIDEO_TYPES.includes(file.type)) {
+                errors.push('Invalid file type');
+                fileInfo.isValid = false;
+            }
+
+            if (file.size > MAX_FILE_SIZE) {
+                errors.push('File too large (max 25MB)');
+                fileInfo.isValid = false;
+            }
+
+            fileInfo.errors = errors;
+            return fileInfo;
         }
 
         document.getElementById('videos').addEventListener('change', function(e) {
@@ -165,14 +230,14 @@
                 document.getElementById('file-count').textContent = fileCount;
                 fileList.innerHTML = '';
                 
-                files.forEach((file, index) => {
+                files.forEach(file => {
                     const fileInfo = validateFile(file);
                     const li = document.createElement('li');
                     li.textContent = `${file.name} (${fileInfo.size})`;
                     
-                    if (!fileInfo.isValidType) {
+                    if (!fileInfo.isValid) {
                         li.classList.add('text-danger');
-                        li.textContent += ' - Invalid file type';
+                        li.textContent += ` - ${fileInfo.errors.join(', ')}`;
                     }
                     
                     fileList.appendChild(li);
@@ -193,12 +258,20 @@
             const formData = new FormData();
             formData.append('message', messageInput.value);
             
-            files.forEach((file, index) => {
+            let hasValidFiles = true;
+            files.forEach(file => {
                 const fileInfo = validateFile(file);
-                if (fileInfo.isValidType) {
+                if (fileInfo.isValid) {
                     formData.append('videos', file);
+                } else {
+                    hasValidFiles = false;
+                    showError(`Invalid file: ${file.name} - ${fileInfo.errors.join(', ')}`);
                 }
             });
+
+            if (!hasValidFiles) {
+                return;
+            }
 
             try {
                 form.classList.add('loading');
@@ -207,10 +280,6 @@
                     body: formData
                 });
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
                 const data = await response.json();
                 
                 if (data.response) {
@@ -232,6 +301,7 @@
                 chatContainer.innerHTML += `
                     <div class="chat-message error">An error occurred. Please try again.</div>
                 `;
+                showError('Failed to send message. Please try again.');
             } finally {
                 form.classList.remove('loading');
             }
@@ -243,10 +313,6 @@
                     handleApiRequest('/chat_history'),
                     handleApiRequest('/video_analysis_history')
                 ]);
-
-                if (!chatResponse.ok || !videoResponse.ok) {
-                    throw new Error('One or more requests failed');
-                }
 
                 const [chatData, videoData] = await Promise.all([
                     chatResponse.json(),
@@ -273,16 +339,14 @@
                     : '<div class="alert alert-info">No video analysis history available</div>';
             } catch (error) {
                 console.error('Error loading history:', error);
+                showError('Failed to load history. Please refresh the page.');
                 const errorMessage = '<div class="alert alert-danger">Error loading history. Please refresh the page.</div>';
                 document.getElementById('chat-history').innerHTML = errorMessage;
                 document.getElementById('video-analysis-history').innerHTML = errorMessage;
             }
         }
 
-        // Check authentication status on page load
-        checkAuthStatus();
-        startSessionKeepalive();
-
+        // Check authentication status with improved error handling
         async function checkAuthStatus() {
             try {
                 const response = await handleApiRequest('/auth_status');
@@ -298,6 +362,7 @@
                 }
             } catch (error) {
                 console.error('Error checking auth status:', error);
+                showError('Failed to verify authentication. Please refresh the page.');
                 if (!window.location.pathname.includes('/login')) {
                     window.location.href = '/login';
                 }
@@ -313,17 +378,25 @@
                 const response = await handleApiRequest('/logout', {
                     method: 'POST'
                 });
+                
                 const data = await response.json();
                 if (data.success) {
                     window.location.href = '/login';
+                } else {
+                    throw new Error(data.message || 'Logout failed');
                 }
             } catch (error) {
                 console.error('Error:', error);
+                showError('Failed to logout. Please try again.');
             } finally {
                 spinner.classList.add('d-none');
                 this.disabled = false;
             }
         });
+
+        // Initialize
+        checkAuthStatus();
+        startSessionKeepalive();
     </script>
 </body>
 </html>
