@@ -81,6 +81,17 @@ class RedisManager:
         self.redis.incr(key)
         return True
 
+    def delete_session(self, session_id: str) -> bool:
+        """Delete session from Redis"""
+        try:
+            key = self._build_key(self.session_prefix, session_id)
+            self.redis.delete(key)
+            logger.info(f"Session deleted: {key}")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting session: {e}")
+            return False
+
     # Session Management
     def set_session(self, session_id: str, data: Dict, ttl: Optional[int] = None) -> bool:
         """Store session data in Redis"""

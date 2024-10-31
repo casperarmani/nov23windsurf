@@ -1,0 +1,276 @@
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:3000 (Press CTRL+C to quit)
+INFO:     172.31.196.19:34950 - "GET / HTTP/1.1" 200 OK
+INFO:     172.31.196.19:34950 - "GET /styles.css HTTP/1.1" 200 OK
+INFO:redis_manager:Session found: session:0JMtZ6lPD5jInNOCKkF_JmOTopkqW_FBFb3oQeSg3DU
+INFO:     172.31.196.19:34950 - "GET /auth_status HTTP/1.1" 200 OK
+INFO:redis_manager:Session found: session:0JMtZ6lPD5jInNOCKkF_JmOTopkqW_FBFb3oQeSg3DU
+INFO:redis_manager:Cache miss for key: cache:chat_history:e5fb9299-3a16-4453-9586-2735c521d843
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/user_chat_history?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=50 "HTTP/1.1 200 OK"
+INFO:redis_manager:Cache set successfully: cache:chat_history:e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.19:34950 - "GET /chat_history HTTP/1.1" 200 OK
+INFO:redis_manager:Session found: session:0JMtZ6lPD5jInNOCKkF_JmOTopkqW_FBFb3oQeSg3DU
+INFO:redis_manager:Cache miss for key: cache:video_history:e5fb9299-3a16-4453-9586-2735c521d843
+INFO:httpx:HTTP Request: GET https://xghbfotsivdbuqvumyyu.supabase.co/rest/v1/video_analysis_output?select=%2A&user_id=eq.e5fb9299-3a16-4453-9586-2735c521d843&order=TIMESTAMP.desc&limit=10 "HTTP/1.1 200 OK"
+INFO:redis_manager:Cache set successfully: cache:video_history:e5fb9299-3a16-4453-9586-2735c521d843
+INFO:     172.31.196.19:34960 - "GET /video_analysis_history HTTP/1.1" 200 OK
+INFO:     172.31.196.19:34960 - "POST /logout HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/uvicorn/protocols/http/h11_impl.py", line 428, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 78, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/applications.py", line 276, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/applications.py", line 122, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/errors.py", line 184, in __call__
+    raise exc
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/errors.py", line 162, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/trustedhost.py", line 34, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/gzip.py", line 24, in __call__
+    await responder(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/gzip.py", line 44, in __call__
+    await self.app(scope, receive, self.send_with_gzip)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/cors.py", line 91, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/cors.py", line 146, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 79, in __call__
+    raise exc
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 68, in __call__
+    await self.app(scope, receive, sender)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 21, in __call__
+    raise e
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 718, in __call__
+    await route.handle(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 66, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/routing.py", line 237, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/routing.py", line 163, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/app.py", line 274, in logout
+    redis_manager.delete_session(session_id)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'RedisManager' object has no attribute 'delete_session'
+INFO:     172.31.196.19:59582 - "POST /logout HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/uvicorn/protocols/http/h11_impl.py", line 428, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 78, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/applications.py", line 276, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/applications.py", line 122, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/errors.py", line 184, in __call__
+    raise exc
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/errors.py", line 162, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/trustedhost.py", line 34, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/gzip.py", line 24, in __call__
+    await responder(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/gzip.py", line 44, in __call__
+    await self.app(scope, receive, self.send_with_gzip)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/cors.py", line 91, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/cors.py", line 146, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 79, in __call__
+    raise exc
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 68, in __call__
+    await self.app(scope, receive, sender)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 21, in __call__
+    raise e
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 718, in __call__
+    await route.handle(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 66, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/routing.py", line 237, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/routing.py", line 163, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/app.py", line 274, in logout
+    redis_manager.delete_session(session_id)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'RedisManager' object has no attribute 'delete_session'
+INFO:     172.31.196.19:38640 - "POST /logout HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/uvicorn/protocols/http/h11_impl.py", line 428, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 78, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/applications.py", line 276, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/applications.py", line 122, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/errors.py", line 184, in __call__
+    raise exc
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/errors.py", line 162, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/trustedhost.py", line 34, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/gzip.py", line 24, in __call__
+    await responder(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/gzip.py", line 44, in __call__
+    await self.app(scope, receive, self.send_with_gzip)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/cors.py", line 91, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/cors.py", line 146, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 79, in __call__
+    raise exc
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 68, in __call__
+    await self.app(scope, receive, sender)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 21, in __call__
+    raise e
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 718, in __call__
+    await route.handle(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 66, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/routing.py", line 237, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/routing.py", line 163, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/app.py", line 274, in logout
+    redis_manager.delete_session(session_id)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'RedisManager' object has no attribute 'delete_session'
+INFO:     172.31.196.19:38644 - "POST /logout HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/uvicorn/protocols/http/h11_impl.py", line 428, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 78, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/applications.py", line 276, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/applications.py", line 122, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/errors.py", line 184, in __call__
+    raise exc
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/errors.py", line 162, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/trustedhost.py", line 34, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/gzip.py", line 24, in __call__
+    await responder(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/gzip.py", line 44, in __call__
+    await self.app(scope, receive, self.send_with_gzip)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/cors.py", line 91, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/cors.py", line 146, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 79, in __call__
+    raise exc
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 68, in __call__
+    await self.app(scope, receive, sender)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 21, in __call__
+    raise e
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 718, in __call__
+    await route.handle(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 66, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/routing.py", line 237, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/routing.py", line 163, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/app.py", line 274, in logout
+    redis_manager.delete_session(session_id)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'RedisManager' object has no attribute 'delete_session'
+INFO:     172.31.196.19:38652 - "POST /logout HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/uvicorn/protocols/http/h11_impl.py", line 428, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/uvicorn/middleware/proxy_headers.py", line 78, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/applications.py", line 276, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/applications.py", line 122, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/errors.py", line 184, in __call__
+    raise exc
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/errors.py", line 162, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/trustedhost.py", line 34, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/gzip.py", line 24, in __call__
+    await responder(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/gzip.py", line 44, in __call__
+    await self.app(scope, receive, self.send_with_gzip)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/cors.py", line 91, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/cors.py", line 146, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 79, in __call__
+    raise exc
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/middleware/exceptions.py", line 68, in __call__
+    await self.app(scope, receive, sender)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 21, in __call__
+    raise e
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 718, in __call__
+    await route.handle(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/starlette/routing.py", line 66, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/routing.py", line 237, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/.pythonlibs/lib/python3.11/site-packages/fastapi/routing.py", line 163, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/EnvWaiterApp/app.py", line 274, in logout
+    redis_manager.delete_session(session_id)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'RedisManager' object has no attribute 'delete_session'
