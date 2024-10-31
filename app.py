@@ -82,7 +82,6 @@ app.add_middleware(
 
 @app.middleware("http")
 async def count_requests(request: Request, call_next):
-    """Count total requests for metrics"""
     if not hasattr(app.state, "request_count"):
         app.state.request_count = 0
     app.state.request_count += 1
@@ -91,12 +90,10 @@ async def count_requests(request: Request, call_next):
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize application state and start background tasks"""
     app.state.start_time = time.time()
     asyncio.create_task(cleanup_background())
 
 async def cleanup_background():
-    """Background task for cleanup operations"""
     while True:
         await redis_storage.cleanup_expired_files()
         await redis_manager.cleanup_expired_sessions()
@@ -104,7 +101,6 @@ async def cleanup_background():
         await asyncio.sleep(300)
 
 async def refresh_jwt_token():
-    """Refresh the JWT token using Supabase refresh token"""
     try:
         refresh_response = await supabase.auth.refresh_session()
         if refresh_response and hasattr(refresh_response, 'session') and refresh_response.session:
@@ -115,7 +111,6 @@ async def refresh_jwt_token():
         return False
 
 async def get_current_user(request: Request, return_none=False):
-    """Get current user with improved error handling"""
     try:
         session_id = request.cookies.get('session_id')
         if not session_id:
@@ -160,7 +155,6 @@ async def get_current_user(request: Request, return_none=False):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    """Main page route"""
     user = await get_current_user(request, return_none=True)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
@@ -168,7 +162,6 @@ async def index(request: Request):
 
 @app.get('/login', response_class=HTMLResponse)
 async def login_page(request: Request):
-    """Login page route"""
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post('/login')
@@ -178,7 +171,6 @@ async def login_post(
     password: str = Form(...),
     response: Response = None
 ):
-    """Handle login POST request"""
     try:
         if not redis_manager.check_rate_limit("login", request.client.host):
             raise HTTPException(
@@ -235,7 +227,6 @@ async def login_post(
 
 @app.get('/signup', response_class=HTMLResponse)
 async def signup_page(request: Request):
-    """Signup page route"""
     return templates.TemplateResponse("signup.html", {"request": request})
 
 @app.post('/signup')
@@ -244,7 +235,6 @@ async def signup_post(
     email: str = Form(...),
     password: str = Form(...)
 ):
-    """Handle signup POST request"""
     try:
         if not redis_manager.check_rate_limit("signup", request.client.host):
             raise HTTPException(
@@ -281,7 +271,6 @@ async def signup_post(
 
 @app.post('/logout')
 async def logout(request: Request):
-    """Handle user logout by removing session"""
     session_id = request.cookies.get('session_id')
     if session_id:
         redis_manager.delete_session(session_id)
@@ -292,7 +281,6 @@ async def logout(request: Request):
 
 @app.get('/auth_status')
 async def auth_status(request: Request):
-    """Check authentication status"""
     try:
         user = await get_current_user(request, return_none=True)
         return JSONResponse(content={
@@ -308,7 +296,6 @@ async def auth_status(request: Request):
 
 @app.get("/chat_history")
 async def get_chat_history_endpoint(request: Request):
-    """Get chat history for the current user"""
     user = await get_current_user(request)
     if not user:
         return JSONResponse(content={"history": []})
@@ -326,7 +313,6 @@ async def get_chat_history_endpoint(request: Request):
 
 @app.get("/video_analysis_history")
 async def get_video_analysis_history_endpoint(request: Request):
-    """Get video analysis history for the current user"""
     user = await get_current_user(request)
     if not user:
         return JSONResponse(content={"history": []})
@@ -344,7 +330,6 @@ async def get_video_analysis_history_endpoint(request: Request):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for load balancers"""
     health_status = {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
@@ -405,7 +390,6 @@ async def health_check():
 
 @app.get("/metrics")
 async def metrics():
-    """Metrics endpoint for monitoring"""
     try:
         redis_metrics = await redis_manager.get_metrics()
         
@@ -425,6 +409,48 @@ async def metrics():
             "detail": str(e),
             "timestamp": datetime.utcnow().isoformat()
         }
+
+@app.post("/send_message")
+async def send_message(
+    request: Request,
+    message: str = Form(...),
+    videos: List[UploadFile] = File(None)
+):
+    user = await get_current_user(request)
+    
+    try:
+        if videos:
+            for video in videos:
+                content = await video.read()
+                file_id = str(uuid.uuid4())
+                
+                if await redis_storage.store_file(file_id, content):
+                    analysis_text, metadata = await chatbot.analyze_video(
+                        file_id=file_id,
+                        filename=video.filename
+                    )
+                    
+                    await insert_video_analysis(
+                        user_id=uuid.UUID(user['id']),
+                        upload_file_name=video.filename,
+                        analysis=analysis_text,
+                        video_duration=metadata.get('duration') if metadata else None,
+                        video_format=metadata.get('format') if metadata else None
+                    )
+        
+        response_text = await chatbot.send_message(message)
+        
+        await insert_chat_message(uuid.UUID(user['id']), message, 'user')
+        await insert_chat_message(uuid.UUID(user['id']), response_text, 'bot')
+        
+        cache_key = f"chat_history:{user['id']}"
+        redis_manager.invalidate_cache(cache_key)
+        
+        return JSONResponse(content={"response": response_text})
+        
+    except Exception as e:
+        logger.error(f"Error processing message: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)
