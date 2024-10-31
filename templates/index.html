@@ -76,11 +76,15 @@
                     credentials: 'include'
                 });
                 if (!response.ok) {
-                    throw new Error('Token refresh failed');
+                    throw new Error(`Token refresh failed: ${response.status}`);
                 }
-                return await response.json();
+                const data = await response.json();
+                if (!data.success) {
+                    throw new Error(data.message || 'Token refresh failed');
+                }
+                return data;
             } catch (error) {
-                console.error('Error refreshing token:', error);
+                console.error('Token refresh error:', error.message);
                 throw error;
             }
         }
@@ -124,7 +128,7 @@
                 }
                 return response;
             } catch (error) {
-                console.error('API request error:', error);
+                console.error('API request error:', error.message);
                 throw error;
             }
         }
@@ -135,10 +139,10 @@
                 try {
                     const response = await handleApiRequest('/auth_status');
                     if (!response.ok) {
-                        console.error('Session keepalive failed');
+                        console.error('Session keepalive failed:', response.status);
                     }
                 } catch (error) {
-                    console.error('Session keepalive error:', error);
+                    console.error('Session keepalive error:', error.message);
                 }
             }, 300000); // Ping every 5 minutes
         }
@@ -227,10 +231,10 @@
                 document.getElementById('upload-info').classList.add('d-none');
                 await loadHistory();
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Error:', error.message || 'Unknown error occurred');
                 const chatContainer = document.getElementById('chat-container');
                 chatContainer.innerHTML += `
-                    <div class="chat-message error">An error occurred. Please try again.</div>
+                    <div class="chat-message error">Error: ${error.message || 'An unknown error occurred'}. Please try again.</div>
                 `;
             } finally {
                 form.classList.remove('loading');
@@ -272,8 +276,8 @@
                     `).join('')
                     : '<div class="alert alert-info">No video analysis history available</div>';
             } catch (error) {
-                console.error('Error loading history:', error);
-                const errorMessage = '<div class="alert alert-danger">Error loading history. Please refresh the page.</div>';
+                console.error('Error loading history:', error.message || 'Unknown error occurred');
+                const errorMessage = `<div class="alert alert-danger">Error loading history: ${error.message || 'Unknown error occurred'}. Please refresh the page.</div>`;
                 document.getElementById('chat-history').innerHTML = errorMessage;
                 document.getElementById('video-analysis-history').innerHTML = errorMessage;
             }
@@ -297,7 +301,7 @@
                     }
                 }
             } catch (error) {
-                console.error('Error checking auth status:', error);
+                console.error('Error checking auth status:', error.message || 'Unknown error occurred');
                 if (!window.location.pathname.includes('/login')) {
                     window.location.href = '/login';
                 }
@@ -318,7 +322,8 @@
                     window.location.href = '/login';
                 }
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Error:', error.message || 'Unknown error occurred');
+                alert('Failed to logout. Please try again.');
             } finally {
                 spinner.classList.add('d-none');
                 this.disabled = false;
