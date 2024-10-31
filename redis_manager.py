@@ -7,10 +7,17 @@ import json
 from typing import Optional, Any, Dict, List
 from datetime import datetime, timedelta
 import random
+from enum import Enum
+import asyncio
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+class CircuitState(Enum):
+    CLOSED = "CLOSED"  # Normal operation
+    OPEN = "OPEN"      # Service considered down
+    HALF_OPEN = "HALF_OPEN"  # Testing if service is back
 
 class RedisManager:
     def __init__(self, redis_url: str):
@@ -25,6 +32,13 @@ class RedisManager:
         
         # Initialize Redis client with connection pool
         self.redis = redis.Redis(connection_pool=self.pool)
+        
+        # Circuit breaker configuration
+        self.circuit_state = CircuitState.CLOSED
+        self.error_threshold = 5  # Number of errors before opening circuit
+        self.reset_timeout = 60   # Seconds to wait before attempting reset
+        self.error_count = 0
+        self.last_error_time = 0
         
         # Prefixes for different types of keys
         self.session_prefix = "session:"
@@ -50,17 +64,48 @@ class RedisManager:
         """Build Redis key with prefix"""
         return f"{prefix}{key}"
 
+    def _check_circuit_state(self):
+        """Check if circuit breaker allows operation"""
+        if self.circuit_state == CircuitState.OPEN:
+            if time.time() - self.last_error_time > self.reset_timeout:
+                self.circuit_state = CircuitState.HALF_OPEN
+                logger.info("Circuit breaker state changed to HALF_OPEN")
+            else:
+                raise ConnectionError("Circuit breaker is OPEN")
+        
+        return self.circuit_state == CircuitState.CLOSED
+
+    def _handle_error(self, error: Exception):
+        """Handle error and update circuit breaker state"""
+        self.error_count += 1
+        if self.error_count >= self.error_threshold:
+            self.circuit_state = CircuitState.OPEN
+            self.last_error_time = time.time()
+            logger.warning(f"Circuit breaker opened due to {self.error_count} errors")
+        logger.error(f"Redis operation error: {str(error)}")
+
+    def _handle_success(self):
+        """Handle successful operation"""
+        if self.circuit_state == CircuitState.HALF_OPEN:
+            self.circuit_state = CircuitState.CLOSED
+            self.error_count = 0
+            logger.info("Circuit breaker reset to CLOSED state")
+
     def _retry_operation(self, operation, *args, **kwargs):
-        """Execute Redis operation with retry logic"""
+        """Execute Redis operation with retry logic and circuit breaker"""
+        if not self._check_circuit_state():
+            raise ConnectionError("Circuit breaker is preventing operation")
+        
         for attempt in range(self.max_retries):
             try:
-                return operation(*args, **kwargs)
+                result = operation(*args, **kwargs)
+                self._handle_success()
+                return result
             except (ConnectionError, TimeoutError) as e:
                 if attempt == self.max_retries - 1:
-                    logger.error(f"Redis operation failed after {self.max_retries} attempts: {str(e)}")
+                    self._handle_error(e)
                     raise
                 
-                # Calculate delay with exponential backoff and jitter
                 delay = min(self.base_delay * (2 ** attempt) + random.uniform(0, 0.1), self.max_delay)
                 logger.warning(f"Redis operation failed, retrying in {delay:.2f}s. Error: {str(e)}")
                 time.sleep(delay)
@@ -271,3 +316,74 @@ class RedisManager:
             "current_connections": len(self.pool._in_use_connections),
             "available_connections": len(self.pool._available_connections)
         }
+
+    async def check_health(self) -> Dict[str, Any]:
+        """Check Redis health status"""
+        health_info = {
+            "status": "healthy",
+            "circuit_state": self.circuit_state.value,
+            "connection_pool": self.get_pool_stats(),
+            "latency_ms": None,
+            "errors": []
+        }
+        
+        try:
+            # Measure Redis ping latency
+            start_time = time.time()
+            await asyncio.to_thread(self._retry_operation, self.redis.ping)
+            latency = (time.time() - start_time) * 1000
+            health_info["latency_ms"] = round(latency, 2)
+            
+            # Check key space
+            keyspace_info = await asyncio.to_thread(
+                self._retry_operation,
+                self.redis.info,
+                "keyspace"
+            )
+            health_info["keyspace"] = keyspace_info
+            
+        except Exception as e:
+            health_info["status"] = "unhealthy"
+            health_info["errors"].append(str(e))
+        
+        return health_info
+
+    async def get_metrics(self) -> Dict[str, Any]:
+        """Get comprehensive metrics about Redis operations"""
+        try:
+            metrics = {
+                "pool_stats": self.get_pool_stats(),
+                "circuit_breaker": {
+                    "state": self.circuit_state.value,
+                    "error_count": self.error_count,
+                    "last_error_time": self.last_error_time,
+                },
+                "operations": {
+                    "commands_processed": 0,
+                    "connected_clients": 0,
+                    "used_memory": "0",
+                    "used_memory_peak": "0"
+                }
+            }
+            
+            # Get Redis INFO
+            info = await asyncio.to_thread(self._retry_operation, self.redis.info)
+            if info:
+                metrics["operations"].update({
+                    "commands_processed": info.get("total_commands_processed", 0),
+                    "connected_clients": info.get("connected_clients", 0),
+                    "used_memory": info.get("used_memory_human", "0"),
+                    "used_memory_peak": info.get("used_memory_peak_human", "0")
+                })
+            
+            return metrics
+        except Exception as e:
+            logger.error(f"Error getting metrics: {str(e)}")
+            return {
+                "error": str(e),
+                "pool_stats": self.get_pool_stats(),
+                "circuit_breaker": {
+                    "state": self.circuit_state.value,
+                    "error_count": self.error_count
+                }
+            }

@@ -9,13 +9,14 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from chatbot import Chatbot
-from database import create_user, get_user_by_email, insert_chat_message, get_chat_history, insert_video_analysis, get_video_analysis_history, check_user_exists
+from database import create_user, get_user_by_email, insert_chat_message, get_chat_history
+from database import insert_video_analysis, get_video_analysis_history, check_user_exists
 from dotenv import load_dotenv
 import uvicorn
 from supabase.client import create_client, Client
 import uuid
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
 import time
 import jwt
@@ -26,6 +27,7 @@ import asyncio
 import secrets
 import httpx
 
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -79,346 +81,200 @@ app.add_middleware(
     allowed_hosts=["*"]
 )
 
+@app.middleware("http")
+async def count_requests(request: Request, call_next):
+    """Count total requests for metrics"""
+    if not hasattr(app.state, "request_count"):
+        app.state.request_count = 0
+    app.state.request_count += 1
+    response = await call_next(request)
+    return response
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize application state and start background tasks"""
+    app.state.start_time = time.time()
+    # Start background cleanup task
+    asyncio.create_task(cleanup_background())
+
+async def cleanup_background():
+    """Background task for cleanup operations"""
+    while True:
+        await redis_storage.cleanup_expired_files()
+        await redis_manager.cleanup_expired_sessions()
+        await redis_manager.cleanup_expired_cache()
+        await asyncio.sleep(300)  # Run every 5 minutes
+
 async def refresh_jwt_token():
     """Refresh the JWT token using Supabase refresh token"""
     try:
         refresh_response = await supabase.auth.refresh_session()
-        if refresh_response and refresh_response.session:
+        if refresh_response and hasattr(refresh_response, 'session') and refresh_response.session:
             return True
         return False
     except Exception as e:
         logger.error(f"Error refreshing token: {str(e)}")
         return False
 
-def get_current_user(request: Request, return_none=False):
-    """Get current user with token refresh logic"""
-    session_id = request.cookies.get('session_id')
-    if not session_id:
-        if return_none:
-            return None
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
-    session_data = redis_manager.get_session(session_id)
-    if not session_data:
-        if return_none:
-            return None
-        raise HTTPException(status_code=401, detail="Not authenticated")
+async def get_current_user(request: Request, return_none=False):
+    """Get current user with improved error handling"""
+    try:
+        session_id = request.cookies.get('session_id')
+        if not session_id:
+            if return_none:
+                return None
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        session_data = redis_manager.get_session(session_id)
+        if not session_data:
+            if return_none:
+                return None
+            raise HTTPException(status_code=401, detail="Not authenticated")
 
-    # Check if access token needs refresh (every 50 minutes)
-    last_refresh = session_data.get('last_refresh', 0)
-    if time.time() - last_refresh > 3000:  # 50 minutes
-        try:
-            refresh_success = asyncio.run(refresh_jwt_token())
-            if refresh_success:
-                session_data['last_refresh'] = time.time()
-                redis_manager.set_session(session_id, session_data)
-            else:
+        # Ensure session has required fields
+        if not isinstance(session_data, dict) or 'id' not in session_data:
+            if return_none:
+                return None
+            raise HTTPException(status_code=401, detail="Invalid session data")
+
+        last_refresh = session_data.get('last_refresh', 0)
+        if time.time() - last_refresh > 3000:  # 50 minutes
+            try:
+                refresh_success = await refresh_jwt_token()
+                if refresh_success:
+                    session_data['last_refresh'] = time.time()
+                    redis_manager.set_session(session_id, session_data)
+                else:
+                    if return_none:
+                        return None
+                    raise HTTPException(status_code=401, detail="Session expired")
+            except Exception as e:
+                logger.error(f"Token refresh error: {str(e)}")
                 if return_none:
                     return None
                 raise HTTPException(status_code=401, detail="Session expired")
-        except Exception as e:
-            logger.error(f"Token refresh error: {str(e)}")
-            if return_none:
-                return None
-            raise HTTPException(status_code=401, detail="Session expired")
 
-    return session_data
-
-async def cleanup_background():
-    while True:
-        await redis_storage.cleanup_expired_files()
-        await redis_manager.cleanup_expired_sessions()
-        await redis_manager.cleanup_expired_cache()
-        await asyncio.sleep(300)
-
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(cleanup_background())
+        return session_data
+    except Exception as e:
+        logger.error(f"Error in get_current_user: {str(e)}")
+        if return_none:
+            return None
+        raise HTTPException(status_code=401, detail="Authentication error")
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
+    """Main page route"""
+    user = await get_current_user(request, return_none=True)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get('/login', response_class=HTMLResponse)
 async def login_page(request: Request):
+    """Login page route"""
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.get('/signup', response_class=HTMLResponse)
 async def signup_page(request: Request):
+    """Signup page route"""
     return templates.TemplateResponse("signup.html", {"request": request})
-
-@app.post("/send_message")
-async def send_message(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    message: str = Form(""),
-    videos: List[UploadFile] = File(None)
-):
-    user = get_current_user(request)
-    client_ip = request.client.host
-    
-    if not redis_manager.check_rate_limit(user['id'], client_ip):
-        raise HTTPException(status_code=429, detail="Too many requests")
-
-    if not user or 'id' not in user:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    user_id = uuid.UUID(user['id'])
-    
-    if not await check_user_exists(user_id):
-        raise HTTPException(status_code=400, detail="User does not exist")
-    
-    if videos and len(videos) > 0:
-        responses = []
-        
-        try:
-            for video in videos:
-                content = await video.read()
-                file_size = len(content)
-                
-                if file_size > redis_storage.max_file_size:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"File size exceeds maximum limit of {redis_storage.max_file_size / (1024 * 1024)}MB"
-                    )
-                
-                file_id = str(uuid.uuid4())
-                
-                if not await redis_storage.store_file(file_id, content):
-                    raise HTTPException(status_code=500, detail="Failed to store file")
-                
-                try:
-                    await insert_chat_message(
-                        user_id, 
-                        f"[Uploaded video: {video.filename or 'video'}]", 
-                        'text'
-                    )
-                    
-                    analysis_result, metadata = await chatbot.analyze_video(file_id, video.filename, message)
-                    
-                    if metadata:
-                        await insert_video_analysis(
-                            user_id=user_id,
-                            upload_file_name=video.filename or "uploaded_video",
-                            analysis=analysis_result,
-                            video_duration=metadata.get('duration'),
-                            video_format=metadata.get('format')
-                        )
-                    else:
-                        await insert_video_analysis(
-                            user_id=user_id,
-                            upload_file_name=video.filename or "uploaded_video",
-                            analysis=analysis_result
-                        )
-                    
-                    await insert_chat_message(user_id, analysis_result, 'bot')
-                    responses.append(analysis_result)
-                    
-                finally:
-                    background_tasks.add_task(redis_storage.delete_file, file_id)
-            
-            combined_response = "\n\n---\n\n".join(responses)
-            return {"response": combined_response}
-            
-        except Exception as e:
-            logger.error(f"Error processing videos: {str(e)}")
-            return {"response": f"An error occurred while processing videos: {str(e)}"}
-    else:
-        await insert_chat_message(user_id, message, 'text')
-        response = await chatbot.send_message(message)
-        await insert_chat_message(user_id, response, 'bot')
-        return {"response": response}
-
-@app.post('/refresh_token')
-async def refresh_token(request: Request):
-    """Endpoint to refresh the JWT token"""
-    try:
-        success = await refresh_jwt_token()
-        if success:
-            return {"success": True, "message": "Token refreshed successfully"}
-        return JSONResponse(
-            status_code=401,
-            content={"success": False, "message": "Failed to refresh token"}
-        )
-    except Exception as e:
-        logger.error(f"Token refresh error: {str(e)}")
-        return JSONResponse(
-            status_code=401,
-            content={"success": False, "message": str(e)}
-        )
-
-@app.post('/login')
-async def login_post(request: Request, response: Response, email: str = Form(...), password: str = Form(...)):
-    if not redis_manager.check_rate_limit("anonymous", request.client.host):
-        raise HTTPException(status_code=429, detail="Too many requests")
-
-    try:
-        auth_response = supabase.auth.sign_in_with_password({"email": email, "password": password})
-        user = auth_response.user
-        if user and user.email:
-            db_user = await get_user_by_email(user.email)
-            
-            session_id = secrets.token_urlsafe(32)
-            session_data = {
-                'id': str(db_user['id']),
-                'email': user.email,
-                'last_refresh': time.time()
-            }
-            
-            if redis_manager.set_session(session_id, session_data):
-                response.set_cookie(
-                    key="session_id",
-                    value=session_id,
-                    httponly=True,
-                    secure=True,
-                    samesite="lax",
-                    max_age=3600
-                )
-                return {"success": True, "message": "Login successful"}
-            else:
-                raise ValueError("Failed to create session")
-        else:
-            raise ValueError("Invalid user data received from Supabase")
-    except Exception as e:
-        logger.error(f"Login error: {str(e)}")
-        return JSONResponse({"success": False, "message": str(e)}, status_code=400)
-
-@app.post('/signup')
-async def signup_post(request: Request, response: Response, email: str = Form(...), password: str = Form(...)):
-    if not redis_manager.check_rate_limit("anonymous", request.client.host):
-        raise HTTPException(status_code=429, detail="Too many requests")
-
-    try:
-        auth_response = supabase.auth.sign_up({"email": email, "password": password})
-        user = auth_response.user
-        if user and user.email:
-            db_user = await create_user(user.email)
-            
-            session_id = secrets.token_urlsafe(32)
-            session_data = {
-                'id': str(db_user['id']),
-                'email': user.email,
-                'last_refresh': time.time()
-            }
-            
-            if redis_manager.set_session(session_id, session_data):
-                response.set_cookie(
-                    key="session_id",
-                    value=session_id,
-                    httponly=True,
-                    secure=True,
-                    samesite="lax",
-                    max_age=3600
-                )
-                return {"success": True, "message": "Signup successful"}
-            else:
-                return JSONResponse({"success": False, "message": "Failed to create session"}, status_code=400)
-        else:
-            return JSONResponse({"success": False, "message": "Signup failed"}, status_code=400)
-    except Exception as e:
-        logger.error(f"Signup error: {str(e)}")
-        return JSONResponse({"success": False, "message": str(e)}, status_code=400)
 
 @app.post('/logout')
 async def logout(request: Request, response: Response):
+    """Handle user logout by removing session"""
     session_id = request.cookies.get('session_id')
     if session_id:
-        redis_manager.delete_session(session_id)
-        response.delete_cookie(key="session_id")
+        try:
+            await redis_manager.delete_session(session_id)
+        except Exception as e:
+            logger.error(f"Error during logout: {str(e)}")
+        finally:
+            response.delete_cookie(key="session_id")
     return {"success": True, "message": "Logout successful"}
 
-@app.get("/auth_status")
-async def auth_status(request: Request):
-    user = get_current_user(request, return_none=True)
-    return {
-        "authenticated": user is not None,
-        "user": user if user else None,
-        "current_path": request.url.path
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for load balancers"""
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "services": {
+            "redis": {
+                "status": "unknown",
+                "details": None
+            },
+            "supabase": {
+                "status": "unknown",
+                "details": None
+            }
+        }
     }
-
-@app.get("/chat_history")
-async def chat_history(request: Request):
+    
     try:
-        user = get_current_user(request, return_none=True)
-        if not user:
-            return {"history": []}
-        
-        cache_key = f"chat_history:{user['id']}"
-        try:
-            cached_history = redis_manager.get_cache(cache_key)
-            if cached_history is not None:
-                logger.info(f"Returning cached chat history for user {user['id']}")
-                return {"history": cached_history}
-        except Exception as cache_error:
-            logger.error(f"Error retrieving chat history from cache: {str(cache_error)}")
-        
-        try:
-            user_id = uuid.UUID(user['id'])
-            history = await get_chat_history(user_id)
-            
-            try:
-                if not redis_manager.set_cache(cache_key, history):
-                    logger.warning(f"Failed to cache chat history for user {user['id']}")
-            except Exception as cache_error:
-                logger.error(f"Error caching chat history: {str(cache_error)}")
-            
-            return {"history": history}
-            
-        except Exception as db_error:
-            logger.error(f"Error fetching chat history from database: {str(db_error)}")
-            return JSONResponse(
-                status_code=500,
-                content={"error": "Failed to fetch chat history"}
+        redis_health = await redis_manager.check_health()
+        health_status["services"]["redis"] = {
+            "status": redis_health["status"],
+            "details": redis_health
+        }
+        if redis_health["status"] != "healthy":
+            health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["services"]["redis"] = {
+            "status": "unhealthy",
+            "details": {"error": str(e)}
+        }
+        health_status["status"] = "unhealthy"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{supabase_url}/health",
+                headers={"apikey": supabase_key},
+                timeout=5.0
             )
             
+            if response.status_code == 200:
+                health_status["services"]["supabase"] = {
+                    "status": "healthy",
+                    "details": response.json()
+                }
+            else:
+                health_status["services"]["supabase"] = {
+                    "status": "degraded",
+                    "details": {"status_code": response.status_code}
+                }
+                health_status["status"] = "degraded"
     except Exception as e:
-        logger.error(f"Unexpected error in chat history endpoint: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Internal server error"}
-        )
+        health_status["services"]["supabase"] = {
+            "status": "unhealthy",
+            "details": {"error": str(e)}
+        }
+        health_status["status"] = "unhealthy"
+    
+    return health_status
 
-@app.get("/video_analysis_history")
-async def video_analysis_history(request: Request):
+@app.get("/metrics")
+async def metrics():
+    """Metrics endpoint for monitoring"""
     try:
-        user = get_current_user(request, return_none=True)
-        if not user:
-            return {"history": []}
+        redis_metrics = await redis_manager.get_metrics()
         
-        cache_key = f"video_history:{user['id']}"
-        try:
-            cached_history = redis_manager.get_cache(cache_key)
-            if cached_history is not None:
-                logger.info(f"Returning cached video history for user {user['id']}")
-                return {"history": cached_history}
-        except Exception as cache_error:
-            logger.error(f"Error retrieving video history from cache: {str(cache_error)}")
-        
-        try:
-            user_id = uuid.UUID(user['id'])
-            history = await get_video_analysis_history(user_id)
-            
-            try:
-                if not redis_manager.set_cache(cache_key, history):
-                    logger.warning(f"Failed to cache video history for user {user['id']}")
-            except Exception as cache_error:
-                logger.error(f"Error caching video history: {str(cache_error)}")
-            
-            return {"history": history}
-            
-        except Exception as db_error:
-            logger.error(f"Error fetching video history from database: {str(db_error)}")
-            return JSONResponse(
-                status_code=500,
-                content={"error": "Failed to fetch video analysis history"}
-            )
-            
+        metrics_data = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "redis": redis_metrics,
+            "app": {
+                "uptime": time.time() - app.state.start_time if hasattr(app.state, "start_time") else 0,
+                "requests_total": app.state.request_count if hasattr(app.state, "request_count") else 0,
+            }
+        }
+        return metrics_data
     except Exception as e:
-        logger.error(f"Unexpected error in video history endpoint: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Internal server error"}
-        )
+        logger.error(f"Error collecting metrics: {str(e)}")
+        return {
+            "error": "Failed to collect metrics",
+            "detail": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)
