@@ -16,9 +16,9 @@ import uvicorn
 from supabase.client import create_client, Client
 import uuid
 import logging
-import time
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
+import time
 import jwt
 from fastapi.responses import Response
 from redis_storage import RedisFileStorage
@@ -92,12 +92,6 @@ async def get_current_user(request: Request, return_none=False):
                 return None
             raise HTTPException(status_code=401, detail="Invalid session data")
 
-        last_refresh = session_data.get('last_refresh', 0)
-        if time.time() - last_refresh > 3600:  # 1 hour expiry
-            if return_none:
-                return None
-            raise HTTPException(status_code=401, detail="Session expired")
-
         return session_data
     except Exception as e:
         logger.error(f"Error in get_current_user: {str(e)}")
@@ -118,46 +112,14 @@ async def auth_status(request: Request):
                 }
             )
 
-        client_ip = request.client.host
-        rate_limit_key = f"keepalive:{client_ip}"
-        
-        if not redis_manager.check_rate_limit(rate_limit_key, client_ip):
-            return JSONResponse(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                content={
-                    "authenticated": False,
-                    "message": "Too many keepalive requests"
-                }
-            )
-
-        session_data = None
-        retry_count = 3
-        for attempt in range(retry_count):
-            try:
-                session_data = redis_manager.get_session(session_id)
-                if session_data:
-                    break
-            except Exception as e:
-                if attempt == retry_count - 1:
-                    raise
-                await asyncio.sleep(0.1 * (attempt + 1))
-
-        if not session_data:
+        # Refresh session if it exists
+        if await redis_manager.refresh_session(session_id):
+            user = await get_current_user(request, return_none=True)
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
-                    "authenticated": False,
-                    "message": "Session expired or invalid"
-                }
-            )
-
-        session_data['last_refresh'] = time.time()
-        if redis_manager.set_session(session_id, session_data):
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "authenticated": True,
-                    "user": session_data,
+                    "authenticated": user is not None,
+                    "user": user if user else None,
                     "session_status": "active"
                 }
             )
@@ -166,17 +128,16 @@ async def auth_status(request: Request):
                 status_code=status.HTTP_200_OK,
                 content={
                     "authenticated": False,
-                    "message": "Failed to refresh session"
+                    "message": "Session expired or invalid"
                 }
             )
-
     except Exception as e:
         logger.error(f"Auth status error: {str(e)}")
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "authenticated": False,
-                "error": "Internal server error",
+                "error": str(e),
                 "session_status": "error"
             }
         )
@@ -375,6 +336,7 @@ async def send_message(
                 content = await video.read()
                 file_id = str(uuid.uuid4())
                 
+                # Add video processing task to queue
                 task_id = redis_manager.enqueue_task(
                     task_type=TaskType.VIDEO_PROCESSING,
                     payload={
@@ -391,6 +353,7 @@ async def send_message(
                         filename=video.filename
                     )
                     
+                    # Add video analysis task to queue
                     analysis_task_id = redis_manager.enqueue_task(
                         task_type=TaskType.VIDEO_ANALYSIS,
                         payload={

@@ -54,12 +54,9 @@
     </div>
 
     <script>
+        // Session management and API request handling
         let isRefreshing = false;
         let failedQueue = [];
-        let keepaliveRetryCount = 0;
-        const MAX_RETRY_COUNT = 5;
-        const BASE_RETRY_DELAY = 5000;
-        const VALID_VIDEO_TYPES = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo'];
 
         function processQueue(error, token = null) {
             failedQueue.forEach(prom => {
@@ -102,6 +99,7 @@
                             await refreshToken();
                             isRefreshing = false;
                             processQueue(null);
+                            // Retry the original request
                             return await fetch(url, {
                                 ...options,
                                 credentials: 'include'
@@ -113,6 +111,7 @@
                             throw error;
                         }
                     } else {
+                        // Wait for the token refresh
                         return new Promise((resolve, reject) => {
                             failedQueue.push({ resolve, reject });
                         }).then(() => {
@@ -130,56 +129,23 @@
             }
         }
 
-        async function checkAuthStatus() {
-            try {
-                const response = await handleApiRequest('/auth_status');
-                if (!response.ok) {
-                    if (response.status === 429) {
-                        throw new Error('Rate limit exceeded');
-                    }
-                    throw new Error('Auth status check failed');
-                }
-                
-                const data = await response.json();
-                
-                if (data.authenticated) {
-                    document.getElementById('logout-button').style.display = 'block';
-                    keepaliveRetryCount = 0;
-                    return true;
-                } else {
-                    if (!window.location.pathname.includes('/login')) {
-                        window.location.href = '/login';
-                    }
-                    return false;
-                }
-            } catch (error) {
-                console.error('Error checking auth status:', error);
-                
-                if (keepaliveRetryCount < MAX_RETRY_COUNT) {
-                    const delay = Math.min(BASE_RETRY_DELAY * Math.pow(2, keepaliveRetryCount), 60000);
-                    keepaliveRetryCount++;
-                    console.log(`Retrying auth status check in ${delay/1000} seconds...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    return checkAuthStatus();
-                } else {
-                    if (!window.location.pathname.includes('/login')) {
-                        window.location.href = '/login';
-                    }
-                    return false;
-                }
-            }
-        }
-
+        // Session keepalive
         function startSessionKeepalive() {
             setInterval(async () => {
                 try {
-                    await checkAuthStatus();
+                    const response = await handleApiRequest('/auth_status');
+                    if (!response.ok) {
+                        console.error('Session keepalive failed');
+                    }
                 } catch (error) {
                     console.error('Session keepalive error:', error);
                 }
-            }, 300000);
+            }, 300000); // Ping every 5 minutes
         }
 
+        // File validation
+        const VALID_VIDEO_TYPES = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo'];
+        
         function validateFile(file) {
             return {
                 name: file.name,
@@ -187,48 +153,6 @@
                 size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
                 isValidType: VALID_VIDEO_TYPES.includes(file.type)
             };
-        }
-
-        async function loadHistory() {
-            try {
-                const [chatResponse, videoResponse] = await Promise.all([
-                    handleApiRequest('/chat_history'),
-                    handleApiRequest('/video_analysis_history')
-                ]);
-
-                if (!chatResponse.ok || !videoResponse.ok) {
-                    throw new Error('One or more requests failed');
-                }
-
-                const [chatData, videoData] = await Promise.all([
-                    chatResponse.json(),
-                    videoResponse.json()
-                ]);
-
-                document.getElementById('chat-history').innerHTML = chatData.history.length > 0
-                    ? chatData.history.map(msg => `
-                        <div class="chat-history-item">
-                            <small class="text-muted">${new Date(msg.TIMESTAMP).toLocaleString('en-US', { timeZone: 'UTC' })}</small><br>
-                            <strong>${msg.chat_type === 'bot' ? 'Chatbot' : 'You'}:</strong> ${msg.message}
-                        </div>
-                    `).join('')
-                    : '<div class="alert alert-info">No chat history available</div>';
-                
-                document.getElementById('video-analysis-history').innerHTML = videoData.history.length > 0
-                    ? videoData.history.map(analysis => `
-                        <div class="video-analysis-item">
-                            <small class="text-muted">${new Date(analysis.TIMESTAMP).toLocaleString('en-US', { timeZone: 'UTC' })}</small><br>
-                            <strong>File:</strong> ${analysis.upload_file_name}<br>
-                            <strong>Analysis:</strong> ${analysis.analysis}
-                        </div>
-                    `).join('')
-                    : '<div class="alert alert-info">No video analysis history available</div>';
-            } catch (error) {
-                console.error('Error loading history:', error);
-                const errorMessage = '<div class="alert alert-danger">Error loading history. Please refresh the page.</div>';
-                document.getElementById('chat-history').innerHTML = errorMessage;
-                document.getElementById('video-analysis-history').innerHTML = errorMessage;
-            }
         }
 
         document.getElementById('videos').addEventListener('change', function(e) {
@@ -241,7 +165,7 @@
                 document.getElementById('file-count').textContent = fileCount;
                 fileList.innerHTML = '';
                 
-                files.forEach(file => {
+                files.forEach((file, index) => {
                     const fileInfo = validateFile(file);
                     const li = document.createElement('li');
                     li.textContent = `${file.name} (${fileInfo.size})`;
@@ -269,7 +193,7 @@
             const formData = new FormData();
             formData.append('message', messageInput.value);
             
-            files.forEach(file => {
+            files.forEach((file, index) => {
                 const fileInfo = validateFile(file);
                 if (fileInfo.isValidType) {
                     formData.append('videos', file);
@@ -313,6 +237,73 @@
             }
         });
 
+        async function loadHistory() {
+            try {
+                const [chatResponse, videoResponse] = await Promise.all([
+                    handleApiRequest('/chat_history'),
+                    handleApiRequest('/video_analysis_history')
+                ]);
+
+                if (!chatResponse.ok || !videoResponse.ok) {
+                    throw new Error('One or more requests failed');
+                }
+
+                const [chatData, videoData] = await Promise.all([
+                    chatResponse.json(),
+                    videoResponse.json()
+                ]);
+
+                document.getElementById('chat-history').innerHTML = chatData.history.length > 0
+                    ? chatData.history.map(msg => `
+                        <div class="chat-history-item">
+                            <small class="text-muted">${new Date(msg.TIMESTAMP).toLocaleString('en-US', { timeZone: 'UTC' })}</small><br>
+                            <strong>${msg.chat_type === 'bot' ? 'Chatbot' : 'You'}:</strong> ${msg.message}
+                        </div>
+                    `).join('')
+                    : '<div class="alert alert-info">No chat history available</div>';
+                
+                document.getElementById('video-analysis-history').innerHTML = videoData.history.length > 0
+                    ? videoData.history.map(analysis => `
+                        <div class="video-analysis-item">
+                            <small class="text-muted">${new Date(analysis.TIMESTAMP).toLocaleString('en-US', { timeZone: 'UTC' })}</small><br>
+                            <strong>File:</strong> ${analysis.upload_file_name}<br>
+                            <strong>Analysis:</strong> ${analysis.analysis}
+                        </div>
+                    `).join('')
+                    : '<div class="alert alert-info">No video analysis history available</div>';
+            } catch (error) {
+                console.error('Error loading history:', error);
+                const errorMessage = '<div class="alert alert-danger">Error loading history. Please refresh the page.</div>';
+                document.getElementById('chat-history').innerHTML = errorMessage;
+                document.getElementById('video-analysis-history').innerHTML = errorMessage;
+            }
+        }
+
+        // Check authentication status on page load
+        checkAuthStatus();
+        startSessionKeepalive();
+
+        async function checkAuthStatus() {
+            try {
+                const response = await handleApiRequest('/auth_status');
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    document.getElementById('logout-button').style.display = 'block';
+                    await loadHistory();
+                } else {
+                    if (!window.location.pathname.includes('/login')) {
+                        window.location.href = '/login';
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+                if (!window.location.pathname.includes('/login')) {
+                    window.location.href = '/login';
+                }
+            }
+        }
+
         document.getElementById('logout-button').addEventListener('click', async function() {
             const spinner = this.querySelector('.spinner-border');
             spinner.classList.remove('d-none');
@@ -333,9 +324,6 @@
                 this.disabled = false;
             }
         });
-
-        checkAuthStatus();
-        startSessionKeepalive();
     </script>
 </body>
 </html>
