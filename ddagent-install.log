@@ -1,0 +1,23 @@
+[34m
+* Datadog Agent install script v1.34.0
+[0m
+[34m
+* Installing apt-transport-https, curl and gnupg
+[0m
+	[93mYou don't need sudo in Replit, all files that[0m
+	[93mcan be modified already have the correct permissions[0m
+	[93mand you can install new software using Nix.[0m
+
+[0;93mTools like apt, brew, and yum which modify system dependencies are not directly callable inside Replit. We
+offer the [1;93mSystem Dependencies[0;93m pane for easy dependency management.
+
+For more information, please check https://docs.replit.com/replit-workspace/dependency-management , and don't
+forget to indicate whether you found the documentation helpful at the bottom of the page!
+[0m
+[31m'apt-get update' failed, the script will not install the latest version of apt-transport-https.[0m
+[0;93mTools like apt, brew, and yum which modify system dependencies are not directly callable inside Replit. We
+offer the [1;93mSystem Dependencies[0;93m pane for easy dependency management.
+
+For more information, please check https://docs.replit.com/replit-workspace/dependency-management , and don't
+forget to indicate whether you found the documentation helpful at the bottom of the page!
+[0m

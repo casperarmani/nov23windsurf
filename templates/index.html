@@ -54,9 +54,12 @@
     </div>
 
     <script>
-        // Session management and API request handling
         let isRefreshing = false;
         let failedQueue = [];
+        let keepaliveRetryCount = 0;
+        const MAX_RETRY_COUNT = 5;
+        const BASE_RETRY_DELAY = 5000;
+        const VALID_VIDEO_TYPES = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo'];
 
         function processQueue(error, token = null) {
             failedQueue.forEach(prom => {
@@ -99,7 +102,6 @@
                             await refreshToken();
                             isRefreshing = false;
                             processQueue(null);
-                            // Retry the original request
                             return await fetch(url, {
                                 ...options,
                                 credentials: 'include'
@@ -111,7 +113,6 @@
                             throw error;
                         }
                     } else {
-                        // Wait for the token refresh
                         return new Promise((resolve, reject) => {
                             failedQueue.push({ resolve, reject });
                         }).then(() => {
@@ -129,23 +130,56 @@
             }
         }
 
-        // Session keepalive
+        async function checkAuthStatus() {
+            try {
+                const response = await handleApiRequest('/auth_status');
+                if (!response.ok) {
+                    if (response.status === 429) {
+                        throw new Error('Rate limit exceeded');
+                    }
+                    throw new Error('Auth status check failed');
+                }
+                
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    document.getElementById('logout-button').style.display = 'block';
+                    keepaliveRetryCount = 0;
+                    return true;
+                } else {
+                    if (!window.location.pathname.includes('/login')) {
+                        window.location.href = '/login';
+                    }
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+                
+                if (keepaliveRetryCount < MAX_RETRY_COUNT) {
+                    const delay = Math.min(BASE_RETRY_DELAY * Math.pow(2, keepaliveRetryCount), 60000);
+                    keepaliveRetryCount++;
+                    console.log(`Retrying auth status check in ${delay/1000} seconds...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return checkAuthStatus();
+                } else {
+                    if (!window.location.pathname.includes('/login')) {
+                        window.location.href = '/login';
+                    }
+                    return false;
+                }
+            }
+        }
+
         function startSessionKeepalive() {
             setInterval(async () => {
                 try {
-                    const response = await handleApiRequest('/auth_status');
-                    if (!response.ok) {
-                        console.error('Session keepalive failed');
-                    }
+                    await checkAuthStatus();
                 } catch (error) {
                     console.error('Session keepalive error:', error);
                 }
-            }, 300000); // Ping every 5 minutes
+            }, 300000);
         }
 
-        // File validation
-        const VALID_VIDEO_TYPES = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo'];
-        
         function validateFile(file) {
             return {
                 name: file.name,
@@ -154,88 +188,6 @@
                 isValidType: VALID_VIDEO_TYPES.includes(file.type)
             };
         }
-
-        document.getElementById('videos').addEventListener('change', function(e) {
-            const files = Array.from(e.target.files);
-            const fileCount = files.length;
-            const uploadInfo = document.getElementById('upload-info');
-            const fileList = document.getElementById('file-list');
-            
-            if (fileCount > 0) {
-                document.getElementById('file-count').textContent = fileCount;
-                fileList.innerHTML = '';
-                
-                files.forEach((file, index) => {
-                    const fileInfo = validateFile(file);
-                    const li = document.createElement('li');
-                    li.textContent = `${file.name} (${fileInfo.size})`;
-                    
-                    if (!fileInfo.isValidType) {
-                        li.classList.add('text-danger');
-                        li.textContent += ' - Invalid file type';
-                    }
-                    
-                    fileList.appendChild(li);
-                });
-                uploadInfo.classList.remove('d-none');
-            } else {
-                uploadInfo.classList.add('d-none');
-            }
-        });
-
-        document.getElementById('chat-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const messageInput = form.querySelector('#message');
-            const videoInput = form.querySelector('#videos');
-            const files = Array.from(videoInput.files);
-            
-            const formData = new FormData();
-            formData.append('message', messageInput.value);
-            
-            files.forEach((file, index) => {
-                const fileInfo = validateFile(file);
-                if (fileInfo.isValidType) {
-                    formData.append('videos', file);
-                }
-            });
-
-            try {
-                form.classList.add('loading');
-                const response = await handleApiRequest('/send_message', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                
-                if (data.response) {
-                    const chatContainer = document.getElementById('chat-container');
-                    chatContainer.innerHTML += `
-                        <div class="chat-message user">${messageInput.value}</div>
-                        <div class="chat-message bot">${data.response}</div>
-                    `;
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                }
-                
-                messageInput.value = '';
-                videoInput.value = '';
-                document.getElementById('upload-info').classList.add('d-none');
-                await loadHistory();
-            } catch (error) {
-                console.error('Error:', error);
-                const chatContainer = document.getElementById('chat-container');
-                chatContainer.innerHTML += `
-                    <div class="chat-message error">An error occurred. Please try again.</div>
-                `;
-            } finally {
-                form.classList.remove('loading');
-            }
-        });
 
         async function loadHistory() {
             try {
@@ -279,30 +231,87 @@
             }
         }
 
-        // Check authentication status on page load
-        checkAuthStatus();
-        startSessionKeepalive();
+        document.getElementById('videos').addEventListener('change', function(e) {
+            const files = Array.from(e.target.files);
+            const fileCount = files.length;
+            const uploadInfo = document.getElementById('upload-info');
+            const fileList = document.getElementById('file-list');
+            
+            if (fileCount > 0) {
+                document.getElementById('file-count').textContent = fileCount;
+                fileList.innerHTML = '';
+                
+                files.forEach(file => {
+                    const fileInfo = validateFile(file);
+                    const li = document.createElement('li');
+                    li.textContent = `${file.name} (${fileInfo.size})`;
+                    
+                    if (!fileInfo.isValidType) {
+                        li.classList.add('text-danger');
+                        li.textContent += ' - Invalid file type';
+                    }
+                    
+                    fileList.appendChild(li);
+                });
+                uploadInfo.classList.remove('d-none');
+            } else {
+                uploadInfo.classList.add('d-none');
+            }
+        });
 
-        async function checkAuthStatus() {
+        document.getElementById('chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const messageInput = form.querySelector('#message');
+            const videoInput = form.querySelector('#videos');
+            const files = Array.from(videoInput.files);
+            
+            const formData = new FormData();
+            formData.append('message', messageInput.value);
+            
+            files.forEach(file => {
+                const fileInfo = validateFile(file);
+                if (fileInfo.isValidType) {
+                    formData.append('videos', file);
+                }
+            });
+
             try {
-                const response = await handleApiRequest('/auth_status');
+                form.classList.add('loading');
+                const response = await handleApiRequest('/send_message', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
                 const data = await response.json();
                 
-                if (data.authenticated) {
-                    document.getElementById('logout-button').style.display = 'block';
-                    await loadHistory();
-                } else {
-                    if (!window.location.pathname.includes('/login')) {
-                        window.location.href = '/login';
-                    }
+                if (data.response) {
+                    const chatContainer = document.getElementById('chat-container');
+                    chatContainer.innerHTML += `
+                        <div class="chat-message user">${messageInput.value}</div>
+                        <div class="chat-message bot">${data.response}</div>
+                    `;
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
                 }
+                
+                messageInput.value = '';
+                videoInput.value = '';
+                document.getElementById('upload-info').classList.add('d-none');
+                await loadHistory();
             } catch (error) {
-                console.error('Error checking auth status:', error);
-                if (!window.location.pathname.includes('/login')) {
-                    window.location.href = '/login';
-                }
+                console.error('Error:', error);
+                const chatContainer = document.getElementById('chat-container');
+                chatContainer.innerHTML += `
+                    <div class="chat-message error">An error occurred. Please try again.</div>
+                `;
+            } finally {
+                form.classList.remove('loading');
             }
-        }
+        });
 
         document.getElementById('logout-button').addEventListener('click', async function() {
             const spinner = this.querySelector('.spinner-border');
@@ -324,6 +333,9 @@
                 this.disabled = false;
             }
         });
+
+        checkAuthStatus();
+        startSessionKeepalive();
     </script>
 </body>
 </html>
