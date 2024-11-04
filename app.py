@@ -1,4 +1,146 @@
-[Previous code up through the auth_status endpoint remains exactly as shown in the modified code, then continues with:]
+import os
+from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.security import OAuth2AuthorizationCodeBearer
+from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
+from starlette.requests import Request
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from chatbot import Chatbot
+from database import create_user, get_user_by_email, insert_chat_message, get_chat_history
+from database import insert_video_analysis, get_video_analysis_history, check_user_exists
+from dotenv import load_dotenv
+import uvicorn
+from supabase.client import create_client, Client
+import uuid
+import logging
+from typing import List, Dict, Optional, Any
+from datetime import datetime, timedelta
+import time
+import jwt
+from fastapi.responses import Response
+from redis_storage import RedisFileStorage
+from redis_manager import RedisManager, TaskType, TaskPriority
+import asyncio
+import secrets
+import httpx
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+load_dotenv()
+
+redis_url = os.getenv('REDIS_URL')
+if not redis_url:
+    raise ValueError("REDIS_URL environment variable is not set")
+
+redis_storage = RedisFileStorage(redis_url)
+redis_manager = RedisManager(redis_url)
+
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_ANON_KEY")
+
+if not supabase_url or not supabase_key:
+    raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables")
+
+supabase: Client = create_client(supabase_url, supabase_key)
+
+app = FastAPI(
+    title="Video Analysis Chatbot",
+    description="A FastAPI application for video analysis with chatbot capabilities",
+    version="1.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
+)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+chatbot = Chatbot()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["*"]
+)
+
+async def get_current_user(request: Request, return_none=False):
+    try:
+        session_id = request.cookies.get('session_id')
+        if not session_id:
+            if return_none:
+                return None
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        session_data = redis_manager.get_session(session_id)
+        if not session_data:
+            if return_none:
+                return None
+            raise HTTPException(status_code=401, detail="Not authenticated")
+
+        if not isinstance(session_data, dict) or 'id' not in session_data:
+            if return_none:
+                return None
+            raise HTTPException(status_code=401, detail="Invalid session data")
+
+        return session_data
+    except Exception as e:
+        logger.error(f"Error in get_current_user: {str(e)}")
+        if return_none:
+            return None
+        raise HTTPException(status_code=401, detail="Authentication error")
+
+@app.get('/auth_status')
+async def auth_status(request: Request):
+    try:
+        session_id = request.cookies.get('session_id')
+        if not session_id:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": False,
+                    "message": "No session found"
+                }
+            )
+
+        # Refresh session if it exists
+        if await redis_manager.refresh_session(session_id):
+            user = await get_current_user(request, return_none=True)
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": user is not None,
+                    "user": user if user else None,
+                    "session_status": "active"
+                }
+            )
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": False,
+                    "message": "Session expired or invalid"
+                }
+            )
+    except Exception as e:
+        logger.error(f"Auth status error: {str(e)}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "authenticated": False,
+                "error": str(e),
+                "session_status": "error"
+            }
+        )
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -22,8 +164,7 @@ async def login_post(
         if not redis_manager.check_rate_limit("login", request.client.host):
             raise HTTPException(
                 status_code=429,
-                detail="Too many login attempts. Please try again later.",
-                headers={"Retry-After": "60"}
+                detail="Too many login attempts. Please try again later."
             )
 
         auth_response = supabase.auth.sign_in_with_password({
@@ -49,7 +190,7 @@ async def login_post(
             "last_refresh": time.time()
         }
 
-        if not redis_manager.set_session(session_id, session_data, SESSION_TTL):
+        if not redis_manager.set_session(session_id, session_data):
             raise HTTPException(
                 status_code=500,
                 detail="Failed to create session"
@@ -57,12 +198,12 @@ async def login_post(
 
         response = JSONResponse(content={"success": True, "message": "Login successful"})
         response.set_cookie(
-            key=SESSION_COOKIE_NAME,
+            key="session_id",
             value=session_id,
-            httponly=SESSION_COOKIE_HTTPONLY,
-            secure=SESSION_COOKIE_SECURE,
-            samesite=SESSION_COOKIE_SAMESITE,
-            max_age=SESSION_TTL
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=3600
         )
         return response
 
@@ -75,12 +216,12 @@ async def login_post(
 
 @app.post('/logout')
 async def logout(request: Request):
-    session_id = request.cookies.get(SESSION_COOKIE_NAME)
+    session_id = request.cookies.get('session_id')
     if session_id:
         redis_manager.delete_session(session_id)
     
     response = JSONResponse(content={"success": True, "message": "Logout successful"})
-    response.delete_cookie(key=SESSION_COOKIE_NAME)
+    response.delete_cookie(key="session_id")
     return response
 
 @app.get("/chat_history")
@@ -195,6 +336,7 @@ async def send_message(
                 content = await video.read()
                 file_id = str(uuid.uuid4())
                 
+                # Add video processing task to queue
                 task_id = redis_manager.enqueue_task(
                     task_type=TaskType.VIDEO_PROCESSING,
                     payload={
@@ -211,6 +353,7 @@ async def send_message(
                         filename=video.filename
                     )
                     
+                    # Add video analysis task to queue
                     analysis_task_id = redis_manager.enqueue_task(
                         task_type=TaskType.VIDEO_ANALYSIS,
                         payload={
