@@ -9,21 +9,30 @@
     <link href="/static/styles.css" rel="stylesheet">
 </head>
 <body>
-    <div class="container py-4">
+    <div class="container-fluid py-4">
         <div class="row">
             <div class="col-md-8 mx-auto">
-                <div id="auth-section" class="mb-4">
-                    <button id="logout-button" class="btn btn-danger" style="display: none;">
-                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </button>
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <button id="new-chat-button" class="btn btn-primary me-2">
+                            <i class="fas fa-plus-circle"></i> New Chat
+                        </button>
+                        <button id="logout-button" class="btn btn-danger" style="display: none;">
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </button>
+                    </div>
+                    <h1 class="mb-0">
+                        <i class="fas fa-robot"></i> Video Analysis Chatbot
+                    </h1>
                 </div>
-                <h1 class="mb-4">
-                    <i class="fas fa-robot"></i> Video Analysis Chatbot
-                </h1>
-                <div id="chat-container" class="mb-4">
-                    <!-- Chat messages will appear here -->
+
+                <div class="chat-session-container">
+                    <div id="chat-container" class="mb-4">
+                        <!-- Chat messages will appear here -->
+                    </div>
                 </div>
+
                 <form id="chat-form" class="mb-4">
                     <div class="mb-3 position-relative">
                         <label for="message" class="form-label">Message</label>
@@ -53,17 +62,43 @@
         
         <div class="row mt-4">
             <div class="col-md-6">
-                <h3><i class="fas fa-history"></i> Chat History</h3>
-                <div id="chat-history"></div>
+                <div class="history-panel">
+                    <h3><i class="fas fa-history"></i> Chat History</h3>
+                    <div id="chat-history"></div>
+                </div>
             </div>
             <div class="col-md-6">
-                <h3><i class="fas fa-video"></i> Video Analysis History</h3>
-                <div id="video-analysis-history"></div>
+                <div class="history-panel">
+                    <h3><i class="fas fa-video"></i> Video Analysis History</h3>
+                    <div id="video-analysis-history"></div>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
+        // New Chat functionality
+        document.getElementById('new-chat-button').addEventListener('click', function() {
+            const chatContainer = document.getElementById('chat-container');
+            chatContainer.innerHTML = ''; // Clear chat container
+            
+            // Add welcome message
+            chatContainer.innerHTML = `
+                <div class="chat-message bot">
+                    <div class="message-content">
+                        <i class="fas fa-robot message-icon"></i>
+                        Hello! I'm ready to help you analyze videos. You can start a new conversation or upload a video for analysis.
+                    </div>
+                </div>
+            `;
+            
+            // Clear the message input and file upload
+            document.getElementById('message').value = '';
+            document.getElementById('videos').value = '';
+            document.getElementById('upload-info').classList.add('d-none');
+            document.getElementById('char-count').textContent = '0';
+        });
+
         // Character count functionality
         const messageInput = document.getElementById('message');
         const charCount = document.getElementById('char-count');
@@ -215,20 +250,6 @@
             }
         }
 
-        // Session keepalive
-        function startSessionKeepalive() {
-            setInterval(async () => {
-                try {
-                    const response = await handleApiRequest('/auth_status');
-                    if (!response.ok) {
-                        console.error('Session keepalive failed');
-                    }
-                } catch (error) {
-                    console.error('Session keepalive error:', error);
-                }
-            }, 300000); // Ping every 5 minutes
-        }
-
         // File validation
         const VALID_VIDEO_TYPES = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo'];
         
@@ -240,34 +261,6 @@
                 isValidType: VALID_VIDEO_TYPES.includes(file.type)
             };
         }
-
-        document.getElementById('videos').addEventListener('change', function(e) {
-            const files = Array.from(e.target.files);
-            const fileCount = files.length;
-            const uploadInfo = document.getElementById('upload-info');
-            const fileList = document.getElementById('file-list');
-            
-            if (fileCount > 0) {
-                document.getElementById('file-count').textContent = fileCount;
-                fileList.innerHTML = '';
-                
-                files.forEach((file, index) => {
-                    const fileInfo = validateFile(file);
-                    const li = document.createElement('li');
-                    li.textContent = `${file.name} (${fileInfo.size})`;
-                    
-                    if (!fileInfo.isValidType) {
-                        li.classList.add('text-danger');
-                        li.textContent += ' - Invalid file type';
-                    }
-                    
-                    fileList.appendChild(li);
-                });
-                uploadInfo.classList.remove('d-none');
-            } else {
-                uploadInfo.classList.add('d-none');
-            }
-        });
 
         document.getElementById('chat-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -302,8 +295,18 @@
                 if (data.response) {
                     const chatContainer = document.getElementById('chat-container');
                     chatContainer.innerHTML += `
-                        <div class="chat-message user">${messageInput.value}</div>
-                        <div class="chat-message bot">${data.response}</div>
+                        <div class="chat-message user">
+                            <div class="message-content">
+                                <i class="fas fa-user message-icon"></i>
+                                ${messageInput.value}
+                            </div>
+                        </div>
+                        <div class="chat-message bot">
+                            <div class="message-content">
+                                <i class="fas fa-robot message-icon"></i>
+                                ${data.response}
+                            </div>
+                        </div>
                     `;
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                 }
@@ -342,8 +345,16 @@
                 document.getElementById('chat-history').innerHTML = chatData.history.length > 0
                     ? chatData.history.map(msg => `
                         <div class="chat-history-item">
-                            <small class="text-muted">${new Date(msg.TIMESTAMP).toLocaleString('en-US', { timeZone: 'UTC' })}</small><br>
-                            <strong>${msg.chat_type === 'bot' ? 'Chatbot' : 'You'}:</strong> ${msg.message}
+                            <div class="history-timestamp">
+                                ${new Date(msg.TIMESTAMP).toLocaleString('en-US', { timeZone: 'UTC' })}
+                            </div>
+                            <div class="history-content">
+                                <i class="fas fa-${msg.chat_type === 'bot' ? 'robot' : 'user'} history-icon"></i>
+                                <div class="history-message">
+                                    <strong>${msg.chat_type === 'bot' ? 'Chatbot' : 'You'}</strong>
+                                    <div>${msg.message}</div>
+                                </div>
+                            </div>
                         </div>
                     `).join('')
                     : '<div class="alert alert-info">No chat history available</div>';
@@ -351,9 +362,16 @@
                 document.getElementById('video-analysis-history').innerHTML = videoData.history.length > 0
                     ? videoData.history.map(analysis => `
                         <div class="video-analysis-item">
-                            <small class="text-muted">${new Date(analysis.TIMESTAMP).toLocaleString('en-US', { timeZone: 'UTC' })}</small><br>
-                            <strong>File:</strong> ${analysis.upload_file_name}<br>
-                            <strong>Analysis:</strong> ${analysis.analysis}
+                            <div class="history-timestamp">
+                                ${new Date(analysis.TIMESTAMP).toLocaleString('en-US', { timeZone: 'UTC' })}
+                            </div>
+                            <div class="history-content">
+                                <i class="fas fa-video history-icon"></i>
+                                <div class="history-message">
+                                    <div class="video-file-name">${analysis.upload_file_name}</div>
+                                    <div class="video-analysis-text">${analysis.analysis}</div>
+                                </div>
+                            </div>
                         </div>
                     `).join('')
                     : '<div class="alert alert-info">No video analysis history available</div>';
@@ -363,6 +381,20 @@
                 document.getElementById('chat-history').innerHTML = errorMessage;
                 document.getElementById('video-analysis-history').innerHTML = errorMessage;
             }
+        }
+
+        // Session keepalive
+        function startSessionKeepalive() {
+            setInterval(async () => {
+                try {
+                    const response = await handleApiRequest('/auth_status');
+                    if (!response.ok) {
+                        console.error('Session keepalive failed');
+                    }
+                } catch (error) {
+                    console.error('Session keepalive error:', error);
+                }
+            }, 300000); // Ping every 5 minutes
         }
 
         // Check authentication status on page load
@@ -376,40 +408,17 @@
                 
                 if (data.authenticated) {
                     document.getElementById('logout-button').style.display = 'block';
+                    // Show welcome message in new chat
+                    document.getElementById('new-chat-button').click();
                     await loadHistory();
                 } else {
-                    if (!window.location.pathname.includes('/login')) {
-                        window.location.href = '/login';
-                    }
-                }
-            } catch (error) {
-                console.error('Error checking auth status:', error);
-                if (!window.location.pathname.includes('/login')) {
                     window.location.href = '/login';
                 }
+            } catch (error) {
+                console.error('Auth status error:', error);
+                window.location.href = '/login';
             }
         }
-
-        document.getElementById('logout-button').addEventListener('click', async function() {
-            const spinner = this.querySelector('.spinner-border');
-            spinner.classList.remove('d-none');
-            this.disabled = true;
-
-            try {
-                const response = await handleApiRequest('/logout', {
-                    method: 'POST'
-                });
-                const data = await response.json();
-                if (data.success) {
-                    window.location.href = '/login';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-            } finally {
-                spinner.classList.add('d-none');
-                this.disabled = false;
-            }
-        });
     </script>
 </body>
 </html>
