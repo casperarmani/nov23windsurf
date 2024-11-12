@@ -34,11 +34,6 @@ from session_config import (
     COOKIE_SAMESITE,
     SESSION_CLEANUP_INTERVAL
 )
-from typing import Optional
-import hashlib
-from fastapi import Request, HTTPException, Depends
-from fastapi.security import APIKeyHeader
-import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -100,30 +95,12 @@ app.add_middleware(
 )
 
 async def get_current_user(request: Request, return_none=False):
-    """Enhanced get_current_user with security checks"""
     try:
         session_id = request.cookies.get('session_id')
         if not session_id:
             if return_none:
                 return None
             raise HTTPException(status_code=401, detail="Not authenticated")
-        
-        # Get client information
-        user_agent = request.headers.get("user-agent", "")
-        client_ip = request.client.host
-        current_fingerprint = redis_manager.generate_fingerprint(user_agent, client_ip)
-        
-        # Validate session security
-        is_secure = await redis_manager.validate_session_security(
-            session_id,
-            current_fingerprint,
-            client_ip
-        )
-        
-        if not is_secure:
-            if return_none:
-                return None
-            raise HTTPException(status_code=401, detail="Invalid session security")
         
         is_valid, session_data = redis_manager.validate_session(session_id)
         if not is_valid or not session_data:
@@ -143,7 +120,6 @@ async def get_current_user(request: Request, return_none=False):
             await redis_manager.refresh_session(session_id)
 
         return session_data
-        
     except Exception as e:
         logger.error(f"Error in get_current_user: {str(e)}")
         if return_none:
@@ -158,7 +134,6 @@ async def login_post(
     response: Response = None
 ):
     try:
-        # Rate limiting check
         if not redis_manager.check_rate_limit("login", request.client.host):
             raise HTTPException(
                 status_code=429,
@@ -188,18 +163,10 @@ async def login_post(
             "last_refresh": time.time()
         }
 
-        # Create session with security measures
-        success = await redis_manager.create_session_with_security(
-            session_id,
-            session_data,
-            request.headers.get("user-agent", ""),
-            request.client.host
-        )
-
-        if not success:
+        if not redis_manager.set_session(session_id, session_data, SESSION_LIFETIME):
             raise HTTPException(
                 status_code=500,
-                detail="Failed to create secure session"
+                detail="Failed to create session"
             )
 
         response = JSONResponse(content={"success": True, "message": "Login successful"})
@@ -220,79 +187,63 @@ async def login_post(
             content={"success": False, "message": str(e)}
         )
 
-# Add new security monitoring endpoints
-@app.get("/security/metrics")
-async def security_metrics(request: Request):
-    """Get security metrics"""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+@app.post('/logout')
+async def logout(request: Request):
+    session_id = request.cookies.get('session_id')
+    if session_id:
+        redis_manager.delete_session(session_id)
     
-    metrics = await redis_manager.get_security_metrics()
-    return JSONResponse(content=metrics)
+    response = JSONResponse(content={"success": True, "message": "Logout successful"})
+    response.delete_cookie(
+        key="session_id",
+        secure=COOKIE_SECURE,
+        httponly=COOKIE_HTTPONLY,
+        samesite=COOKIE_SAMESITE
+    )
+    return response
 
-# Update health check endpoint to include security status
-@app.get("/health")
-async def health_check():
-    health_status = {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "services": {
-            "redis": await redis_manager.health_check(),
-            "supabase": {
-                "status": "unknown",
-                "details": None
-            }
-        },
-        "security": {
-            "status": "active",
-            "last_check": datetime.utcnow().isoformat(),
-            "metrics": await redis_manager.get_security_metrics()
-        }
-    }
-    
+@app.get("/auth_status")
+async def auth_status(request: Request):
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{supabase_url}/rest/v1/health",
-                headers={
-                    "apikey": supabase_key,
-                    "Content-Type": "application/json"
-                },
-                timeout=5.0
+        session_id = request.cookies.get('session_id')
+        if not session_id:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": False,
+                    "message": "No session found"
+                }
             )
-            
-            if response.status_code == 200:
-                health_status["services"]["supabase"] = {
-                    "status": "healthy",
-                    "details": {"status": "healthy"}
+
+        # Refresh session if it exists
+        if await redis_manager.refresh_session(session_id):
+            user = await get_current_user(request, return_none=True)
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": user is not None,
+                    "user": user if user else None,
+                    "session_status": "active"
                 }
-            else:
-                health_status["services"]["supabase"] = {
-                    "status": "degraded",
-                    "details": {"status_code": response.status_code}
+            )
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": False,
+                    "message": "Session expired or invalid"
                 }
-                health_status["status"] = "degraded"
+            )
     except Exception as e:
-        logger.error(f"Supabase health check error: {str(e)}")
-        health_status["services"]["supabase"] = {
-            "status": "unhealthy",
-            "details": {"error": "Connection failed"}
-        }
-        health_status["status"] = "degraded"
-    
-    # Overall health status determination
-    redis_healthy = health_status["services"]["redis"]["status"] == "healthy"
-    supabase_healthy = health_status["services"]["supabase"]["status"] == "healthy"
-    security_metrics = health_status["security"]["metrics"]
-    
-    if not (redis_healthy and supabase_healthy):
-        health_status["status"] = "unhealthy"
-    elif security_metrics.get("security_events", {}).get("total", 0) > 10:
-        health_status["status"] = "degraded"
-        health_status["security"]["status"] = "warning"
-    
-    return health_status
+        logger.error(f"Auth status error: {str(e)}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "authenticated": False,
+                "error": str(e),
+                "session_status": "error"
+            }
+        )
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -339,23 +290,60 @@ async def get_video_analysis_history_endpoint(request: Request):
     redis_manager.set_cache(cache_key, history)
     return JSONResponse(content={"history": history})
 
+@app.get("/health")
+async def health_check():
+    health_status = {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "services": {
+            "redis": await redis_manager.health_check(),
+            "supabase": {
+                "status": "unknown",
+                "details": None
+            }
+        }
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{supabase_url}/health",
+                headers={"apikey": supabase_key},
+                timeout=5.0
+            )
+            
+            if response.status_code == 200:
+                health_status["services"]["supabase"] = {
+                    "status": "healthy",
+                    "details": response.json()
+                }
+            else:
+                health_status["services"]["supabase"] = {
+                    "status": "degraded",
+                    "details": {"status_code": response.status_code}
+                }
+                health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["services"]["supabase"] = {
+            "status": "unhealthy",
+            "details": {"error": str(e)}
+        }
+        health_status["status"] = "unhealthy"
+    
+    return health_status
 
 @app.get("/metrics")
 async def metrics():
     try:
-        current_time = time.time()
-        uptime = current_time - app.state.start_time if hasattr(app.state, "start_time") else 0
-        request_count = app.state.request_count if hasattr(app.state, "request_count") else 0
-        
-        health_data = await health_check()
+        redis_metrics = await redis_manager.get_metrics()
         
         metrics_data = {
             "timestamp": datetime.utcnow().isoformat(),
+            "redis": redis_metrics,
             "app": {
-                "uptime": uptime,
-                "requests_total": request_count,
-            },
-            "health": health_data
+                "uptime": time.time() - app.state.start_time if hasattr(app.state, "start_time") else 0,
+                "requests_total": app.state.request_count if hasattr(app.state, "request_count") else 0,
+            }
         }
         return metrics_data
     except Exception as e:
