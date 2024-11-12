@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 import random
 from enum import Enum
 import asyncio
+import hashlib
+import ipaddress
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,6 +35,13 @@ class TaskStatus(Enum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+
+class SecurityEvent(Enum):
+    INVALID_FINGERPRINT = "invalid_fingerprint"
+    IP_MISMATCH = "ip_mismatch"
+    RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
+    SUSPICIOUS_PATTERN = "suspicious_pattern"
+    FORCED_LOGOUT = "forced_logout"
 
 class RedisManager:
     def __init__(self, redis_url: str):
@@ -59,10 +68,22 @@ class RedisManager:
         self.dlq_prefix = "dlq:"
         self.result_prefix = "result:"
         
+        self.security_prefix = "security:"
+        self.fingerprint_prefix = "fingerprint:"
+        self.ip_prefix = "ip:"
+        self.revoked_prefix = "revoked:"
+        self.suspicious_prefix = "suspicious:"
+        
         self.session_ttl = 3600
         self.cache_ttl = 300
         self.rate_limit_ttl = 60
         self.result_ttl = 86400
+        
+        self.max_sessions_per_ip = 5
+        self.max_failed_attempts = 5
+        self.suspicious_threshold = 10
+        self.ip_change_limit = 3
+        self.fingerprint_ttl = 86400  # 24 hours
         
         self.rate_limit_requests = 100
         self.rate_limit_window = 60
@@ -498,3 +519,210 @@ class RedisManager:
             "current_connections": len(self.pool._in_use_connections),
             "available_connections": len(self.pool._available_connections)
         }
+
+    def generate_fingerprint(self, user_agent: str, ip: str) -> str:
+        """Generate a session fingerprint based on user agent and IP"""
+        fingerprint_data = f"{user_agent}:{ip}".encode('utf-8')
+        return hashlib.sha256(fingerprint_data).hexdigest()
+
+    def validate_ip_address(self, ip: str) -> bool:
+        """Validate IP address format"""
+        try:
+            ipaddress.ip_address(ip)
+            return True
+        except ValueError:
+            return False
+
+    async def create_session_with_security(self, session_id: str, data: Dict, user_agent: str, ip: str) -> bool:
+        """Create a new session with security measures"""
+        if not self.validate_ip_address(ip):
+            logger.error(f"Invalid IP address format: {ip}")
+            return False
+
+        try:
+            # Generate fingerprint
+            fingerprint = self.generate_fingerprint(user_agent, ip)
+            
+            # Check IP-based session limit
+            ip_sessions_key = f"{self.ip_prefix}{ip}"
+            if self.redis.scard(ip_sessions_key) >= self.max_sessions_per_ip:
+                logger.warning(f"Maximum sessions exceeded for IP: {ip}")
+                self.record_security_event(SecurityEvent.RATE_LIMIT_EXCEEDED, ip)
+                return False
+            
+            # Store session with security metadata
+            session_data = {
+                **data,
+                "fingerprint": fingerprint,
+                "ip": ip,
+                "created_at": time.time(),
+                "last_refresh": time.time(),
+                "refresh_count": 0,
+                "ip_changes": []
+            }
+            
+            key = self._build_key(self.session_prefix, session_id)
+            
+            # Use pipeline for atomic operations
+            with self.redis.pipeline() as pipe:
+                pipe.multi()
+                pipe.set(key, self._serialize_value(session_data), ex=self.session_ttl)
+                pipe.sadd(ip_sessions_key, session_id)
+                pipe.set(f"{self.fingerprint_prefix}{session_id}", fingerprint, ex=self.fingerprint_ttl)
+                pipe.execute()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error creating secure session: {str(e)}")
+            return False
+
+    async def validate_session_security(self, session_id: str, current_fingerprint: str, current_ip: str) -> bool:
+        """Validate session security aspects"""
+        try:
+            session_data = self.get_session(session_id)
+            if not session_data:
+                return False
+            
+            # Check if session is revoked
+            if self.redis.sismember(f"{self.revoked_prefix}sessions", session_id):
+                logger.warning(f"Attempted access to revoked session: {session_id}")
+                return False
+            
+            # Validate fingerprint
+            stored_fingerprint = session_data.get("fingerprint")
+            if stored_fingerprint != current_fingerprint:
+                self.record_security_event(SecurityEvent.INVALID_FINGERPRINT, session_id)
+                return False
+            
+            # Track IP changes
+            stored_ip = session_data.get("ip")
+            if stored_ip != current_ip:
+                ip_changes = session_data.get("ip_changes", [])
+                if len(ip_changes) >= self.ip_change_limit:
+                    self.record_security_event(SecurityEvent.IP_MISMATCH, session_id)
+                    return False
+                
+                # Update IP change history
+                ip_changes.append({
+                    "old_ip": stored_ip,
+                    "new_ip": current_ip,
+                    "timestamp": time.time()
+                })
+                session_data["ip_changes"] = ip_changes
+                session_data["ip"] = current_ip
+                
+                # Update session data
+                self.set_session(session_id, session_data)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error validating session security: {str(e)}")
+            return False
+
+    def record_security_event(self, event: SecurityEvent, identifier: str, details: Dict = None):
+        """Record security events for monitoring"""
+        try:
+            event_data = {
+                "event": event.value,
+                "identifier": identifier,
+                "timestamp": time.time(),
+                "details": details or {}
+            }
+            
+            # Store event in Redis
+            event_key = f"{self.security_prefix}events:{int(time.time())}"
+            self.redis.set(event_key, self._serialize_value(event_data), ex=86400)  # Store for 24 hours
+            
+            # Update suspicious activity counter
+            if event != SecurityEvent.FORCED_LOGOUT:
+                suspicious_key = f"{self.suspicious_prefix}{identifier}"
+                self.redis.incr(suspicious_key)
+                self.redis.expire(suspicious_key, 3600)  # Reset after 1 hour
+                
+                # Check suspicious threshold
+                if int(self.redis.get(suspicious_key) or 0) >= self.suspicious_threshold:
+                    self.revoke_sessions_for_identifier(identifier)
+                    
+        except Exception as e:
+            logger.error(f"Error recording security event: {str(e)}")
+
+    def revoke_sessions_for_identifier(self, identifier: str):
+        """Revoke all sessions for a specific identifier (user_id or IP)"""
+        try:
+            # Add to revoked sessions set
+            self.redis.sadd(f"{self.revoked_prefix}sessions", identifier)
+            
+            # Record revocation event
+            self.record_security_event(
+                SecurityEvent.FORCED_LOGOUT,
+                identifier,
+                {"reason": "suspicious_activity_threshold_exceeded"}
+            )
+            
+        except Exception as e:
+            logger.error(f"Error revoking sessions: {str(e)}")
+
+    async def get_security_metrics(self) -> Dict:
+        """Get security-related metrics"""
+        try:
+            current_time = time.time()
+            hour_ago = current_time - 3600
+            
+            metrics = {
+                "security_events": {
+                    "total": 0,
+                    "by_type": {},
+                    "recent_events": []
+                },
+                "active_sessions": self.redis.scard(f"{self.session_prefix}*"),
+                "revoked_sessions": self.redis.scard(f"{self.revoked_prefix}sessions"),
+                "suspicious_activities": self.redis.keys(f"{self.suspicious_prefix}*")
+            }
+            
+            # Collect recent security events
+            event_keys = self.redis.keys(f"{self.security_prefix}events:*")
+            for key in event_keys:
+                event_data = self._deserialize_value(self.redis.get(key), dict)
+                if event_data and event_data.get("timestamp", 0) > hour_ago:
+                    metrics["security_events"]["total"] += 1
+                    event_type = event_data["event"]
+                    metrics["security_events"]["by_type"][event_type] = metrics["security_events"]["by_type"].get(event_type, 0) + 1
+                    metrics["security_events"]["recent_events"].append(event_data)
+            
+            return metrics
+            
+        except Exception as e:
+            logger.error(f"Error getting security metrics: {str(e)}")
+            return {}
+
+    async def health_check(self) -> Dict:
+        """Check Redis health status and return metrics"""
+        try:
+            # Basic connectivity test
+            self.redis.ping()
+            
+            return {
+                "status": "healthy",
+                "circuit_state": self.circuit_state.value,
+                "error_count": self.error_count,
+                "connection_pool": {
+                    "max_connections": self.pool.max_connections,
+                    "current_connections": len(self.pool._in_use_connections) if hasattr(self.pool, '_in_use_connections') else 0,
+                    "available_connections": len(self.pool._available_connections) if hasattr(self.pool, '_available_connections') else 0
+                },
+                "metrics": {
+                    "active_sessions": len(self.redis.keys(f"{self.session_prefix}*")),
+                    "cached_items": len(self.redis.keys(f"{self.cache_prefix}*")),
+                    "rate_limited_items": len(self.redis.keys(f"{self.rate_prefix}*")),
+                    "security_events": len(self.redis.keys(f"{self.security_prefix}*"))
+                }
+            }
+        except Exception as e:
+            logger.error(f"Redis health check failed: {str(e)}")
+            return {
+                "status": "unhealthy",
+                "circuit_state": self.circuit_state.value,
+                "error": str(e)
+            }
