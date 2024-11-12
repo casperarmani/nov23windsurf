@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request
+from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -26,6 +26,14 @@ from redis_manager import RedisManager, TaskType, TaskPriority
 import asyncio
 import secrets
 import httpx
+from session_config import (
+    SESSION_LIFETIME,
+    SESSION_REFRESH_THRESHOLD,
+    COOKIE_SECURE,
+    COOKIE_HTTPONLY,
+    COOKIE_SAMESITE,
+    SESSION_CLEANUP_INTERVAL
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -55,6 +63,19 @@ app = FastAPI(
     redoc_url="/api/redoc"
 )
 
+# Setup session cleanup background task
+@app.on_event("startup")
+async def startup_event():
+    app.state.start_time = time.time()
+    app.state.request_count = 0
+    
+    async def cleanup_sessions():
+        while True:
+            await redis_manager.cleanup_expired_sessions()
+            await asyncio.sleep(SESSION_CLEANUP_INTERVAL)
+    
+    asyncio.create_task(cleanup_sessions())
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 chatbot = Chatbot()
@@ -81,16 +102,22 @@ async def get_current_user(request: Request, return_none=False):
                 return None
             raise HTTPException(status_code=401, detail="Not authenticated")
         
-        session_data = redis_manager.get_session(session_id)
-        if not session_data:
+        is_valid, session_data = redis_manager.validate_session(session_id)
+        if not is_valid or not session_data:
             if return_none:
                 return None
-            raise HTTPException(status_code=401, detail="Not authenticated")
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
 
         if not isinstance(session_data, dict) or 'id' not in session_data:
             if return_none:
                 return None
             raise HTTPException(status_code=401, detail="Invalid session data")
+
+        # Check if session needs refresh
+        current_time = time.time()
+        last_refresh = session_data.get('last_refresh', 0)
+        if current_time - last_refresh > SESSION_REFRESH_THRESHOLD:
+            await redis_manager.refresh_session(session_id)
 
         return session_data
     except Exception as e:
@@ -99,7 +126,83 @@ async def get_current_user(request: Request, return_none=False):
             return None
         raise HTTPException(status_code=401, detail="Authentication error")
 
-@app.get('/auth_status')
+@app.post('/login')
+async def login_post(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    response: Response = None
+):
+    try:
+        if not redis_manager.check_rate_limit("login", request.client.host):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many login attempts. Please try again later."
+            )
+
+        auth_response = supabase.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+
+        if not auth_response.user:
+            logger.error("Login failed: No user in response")
+            return JSONResponse(
+                status_code=400,
+                content={"success": False, "message": "Invalid credentials"}
+            )
+
+        user = await get_user_by_email(email)
+        if not user:
+            user = await create_user(email)
+
+        session_id = secrets.token_urlsafe(32)
+        session_data = {
+            "id": str(user.get("id")),
+            "email": email,
+            "last_refresh": time.time()
+        }
+
+        if not redis_manager.set_session(session_id, session_data, SESSION_LIFETIME):
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to create session"
+            )
+
+        response = JSONResponse(content={"success": True, "message": "Login successful"})
+        response.set_cookie(
+            key="session_id",
+            value=session_id,
+            httponly=COOKIE_HTTPONLY,
+            secure=COOKIE_SECURE,
+            samesite=COOKIE_SAMESITE,
+            max_age=SESSION_LIFETIME
+        )
+        return response
+
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "message": str(e)}
+        )
+
+@app.post('/logout')
+async def logout(request: Request):
+    session_id = request.cookies.get('session_id')
+    if session_id:
+        redis_manager.delete_session(session_id)
+    
+    response = JSONResponse(content={"success": True, "message": "Logout successful"})
+    response.delete_cookie(
+        key="session_id",
+        secure=COOKIE_SECURE,
+        httponly=COOKIE_HTTPONLY,
+        samesite=COOKIE_SAMESITE
+    )
+    return response
+
+@app.get("/auth_status")
 async def auth_status(request: Request):
     try:
         session_id = request.cookies.get('session_id')
@@ -152,77 +255,6 @@ async def index(request: Request):
 @app.get('/login', response_class=HTMLResponse)
 async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
-
-@app.post('/login')
-async def login_post(
-    request: Request,
-    email: str = Form(...),
-    password: str = Form(...),
-    response: Response = None
-):
-    try:
-        if not redis_manager.check_rate_limit("login", request.client.host):
-            raise HTTPException(
-                status_code=429,
-                detail="Too many login attempts. Please try again later."
-            )
-
-        auth_response = supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
-
-        if not auth_response.user:
-            logger.error("Login failed: No user in response")
-            return JSONResponse(
-                status_code=400,
-                content={"success": False, "message": "Invalid credentials"}
-            )
-
-        user = await get_user_by_email(email)
-        if not user:
-            user = await create_user(email)
-
-        session_id = secrets.token_urlsafe(32)
-        session_data = {
-            "id": str(user.get("id")),
-            "email": email,
-            "last_refresh": time.time()
-        }
-
-        if not redis_manager.set_session(session_id, session_data):
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to create session"
-            )
-
-        response = JSONResponse(content={"success": True, "message": "Login successful"})
-        response.set_cookie(
-            key="session_id",
-            value=session_id,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=3600
-        )
-        return response
-
-    except Exception as e:
-        logger.error(f"Login error: {str(e)}")
-        return JSONResponse(
-            status_code=400,
-            content={"success": False, "message": str(e)}
-        )
-
-@app.post('/logout')
-async def logout(request: Request):
-    session_id = request.cookies.get('session_id')
-    if session_id:
-        redis_manager.delete_session(session_id)
-    
-    response = JSONResponse(content={"success": True, "message": "Logout successful"})
-    response.delete_cookie(key="session_id")
-    return response
 
 @app.get("/chat_history")
 async def get_chat_history_endpoint(request: Request):

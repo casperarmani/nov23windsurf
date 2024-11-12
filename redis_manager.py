@@ -150,9 +150,37 @@ class RedisManager:
             logger.error(f"Unexpected error during deserialization: {e}")
             return None
 
-    def set_session(self, session_id: str, data: Dict, ttl: Optional[int] = None) -> bool:
+    def validate_session(self, session_id: str) -> Tuple[bool, Optional[Dict]]:
+        """Validate a session and return its data if valid"""
         try:
             key = self._build_key(self.session_prefix, session_id)
+            session_data = self._retry_operation(self.redis.get, key)
+            
+            if not session_data:
+                return False, None
+                
+            session_data = self._deserialize_value(session_data, dict)
+            if not session_data or not isinstance(session_data, dict):
+                return False, None
+                
+            last_refresh = session_data.get('last_refresh', 0)
+            current_time = time.time()
+            
+            if current_time - last_refresh > self.session_ttl:
+                self._retry_operation(self.redis.delete, key)
+                return False, None
+                
+            return True, session_data
+            
+        except Exception as e:
+            logger.error(f"Error validating session: {str(e)}")
+            return False, None
+
+    def set_session(self, session_id: str, data: Dict, ttl: Optional[int] = None) -> bool:
+        """Set a new session with the given data"""
+        try:
+            key = self._build_key(self.session_prefix, session_id)
+            data['last_refresh'] = time.time()
             serialized_data = self._serialize_value(data)
             return bool(self._retry_operation(self.redis.set, key, serialized_data, ex=(ttl or self.session_ttl)))
         except Exception as e:
@@ -160,23 +188,76 @@ class RedisManager:
             return False
 
     def get_session(self, session_id: str) -> Optional[Dict]:
+        """Get session data if it exists and is valid"""
         try:
-            key = self._build_key(self.session_prefix, session_id)
-            data = self._retry_operation(self.redis.get, key)
-            if data:
-                return self._deserialize_value(data, dict)
-            return None
+            is_valid, session_data = self.validate_session(session_id)
+            return session_data if is_valid else None
         except Exception as e:
             logger.error(f"Error getting session: {str(e)}")
             return None
 
     def delete_session(self, session_id: str) -> bool:
+        """Delete a session"""
         try:
             key = self._build_key(self.session_prefix, session_id)
             return bool(self._retry_operation(self.redis.delete, key))
         except Exception as e:
             logger.error(f"Error deleting session: {str(e)}")
             return False
+
+    async def refresh_session(self, session_id: str) -> bool:
+        """Refresh a session if it exists and is within refresh threshold"""
+        try:
+            is_valid, session_data = self.validate_session(session_id)
+            if not is_valid or not session_data:
+                return False
+
+            current_time = time.time()
+            last_refresh = session_data.get('last_refresh', 0)
+            
+            # Only refresh if within threshold of expiration
+            if current_time - last_refresh > (self.session_ttl - self.session_ttl / 6):
+                session_data['last_refresh'] = current_time
+                return self.set_session(session_id, session_data, self.session_ttl)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error refreshing session: {str(e)}")
+            return False
+
+    async def cleanup_expired_sessions(self):
+        """Clean up expired sessions"""
+        try:
+            pattern = f"{self.session_prefix}*"
+            cursor = 0
+            cleaned = 0
+            
+            while True:
+                cursor, keys = self._retry_operation(self.redis.scan, cursor, match=pattern)
+                current_time = time.time()
+                
+                for key in keys:
+                    try:
+                        session_data = self._retry_operation(self.redis.get, key)
+                        if session_data:
+                            session_data = self._deserialize_value(session_data, dict)
+                            if session_data and isinstance(session_data, dict):
+                                last_refresh = session_data.get('last_refresh', 0)
+                                if current_time - last_refresh > self.session_ttl:
+                                    self._retry_operation(self.redis.delete, key)
+                                    cleaned += 1
+                    except Exception as e:
+                        logger.error(f"Error processing session key {key}: {str(e)}")
+                        continue
+                        
+                if cursor == 0:
+                    break
+                    
+            logger.info(f"Cleaned up {cleaned} expired sessions")
+            
+        except Exception as e:
+            logger.error(f"Error in session cleanup: {str(e)}")
 
     def check_rate_limit(self, resource: str, identifier: str) -> bool:
         try:
