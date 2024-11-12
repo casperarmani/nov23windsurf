@@ -69,6 +69,47 @@
             failedQueue = [];
         }
 
+        async function manageSession() {
+            const KEEPALIVE_INTERVAL = 240000; // 4 minutes
+            const WARNING_THRESHOLD = 300000;   // 5 minutes before expiry
+            
+            let sessionTimer;
+            let warningShown = false;
+            
+            async function checkSession() {
+                try {
+                    const response = await fetch('/auth_status', {
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    
+                    if (data.authenticated) {
+                        warningShown = false;
+                        
+                        if (data.expires_in < WARNING_THRESHOLD && !warningShown) {
+                            warningShown = true;
+                            console.warn(`Session expires in ${Math.floor(data.expires_in/60000)} minutes`);
+                        }
+                    } else {
+                        window.location.href = '/login';
+                    }
+                } catch (error) {
+                    console.error('Session check error:', error);
+                }
+            }
+            
+            // Start session management
+            sessionTimer = setInterval(checkSession, KEEPALIVE_INTERVAL);
+            
+            // Initial check
+            await checkSession();
+            
+            // Cleanup on page unload
+            window.addEventListener('unload', () => {
+                if (sessionTimer) clearInterval(sessionTimer);
+            });
+        }
+
         async function refreshToken() {
             try {
                 const response = await fetch('/refresh_token', {
