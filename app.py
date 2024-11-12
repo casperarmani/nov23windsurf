@@ -26,7 +26,6 @@ from redis_manager import RedisManager, TaskType, TaskPriority
 import asyncio
 import secrets
 import httpx
-from session_config import SessionConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -76,7 +75,7 @@ app.add_middleware(
 
 async def get_current_user(request: Request, return_none=False):
     try:
-        session_id = request.cookies.get(SessionConfig.COOKIE_NAME)
+        session_id = request.cookies.get('session_id')
         if not session_id:
             if return_none:
                 return None
@@ -100,22 +99,10 @@ async def get_current_user(request: Request, return_none=False):
             return None
         raise HTTPException(status_code=401, detail="Authentication error")
 
-@app.on_event("startup")
-async def startup_event():
-    app.state.start_time = time.time()
-    app.state.request_count = 0
-    
-    async def cleanup_sessions():
-        while True:
-            await redis_manager.cleanup_expired_sessions()
-            await asyncio.sleep(SessionConfig.CLEANUP_INTERVAL)
-    
-    asyncio.create_task(cleanup_sessions())
-
 @app.get('/auth_status')
-async def auth_status(request: Request, response: Response):
+async def auth_status(request: Request):
     try:
-        session_id = request.cookies.get(SessionConfig.COOKIE_NAME)
+        session_id = request.cookies.get('session_id')
         if not session_id:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
@@ -125,29 +112,18 @@ async def auth_status(request: Request, response: Response):
                 }
             )
 
+        # Refresh session if it exists
         if await redis_manager.refresh_session(session_id):
             user = await get_current_user(request, return_none=True)
-            
-            response.set_cookie(
-                key=SessionConfig.COOKIE_NAME,
-                value=session_id,
-                httponly=SessionConfig.COOKIE_HTTPONLY,
-                secure=SessionConfig.COOKIE_SECURE,
-                samesite=SessionConfig.COOKIE_SAMESITE,
-                max_age=SessionConfig.SLIDING_WINDOW
-            )
-            
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
                     "authenticated": user is not None,
                     "user": user if user else None,
-                    "session_status": "active",
-                    "expires_in": SessionConfig.SLIDING_WINDOW
+                    "session_status": "active"
                 }
             )
         else:
-            response.delete_cookie(key=SessionConfig.COOKIE_NAME)
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -211,11 +187,10 @@ async def login_post(
         session_data = {
             "id": str(user.get("id")),
             "email": email,
-            "created_at": time.time(),
             "last_refresh": time.time()
         }
 
-        if not await redis_manager.set_session(session_id, session_data):
+        if not redis_manager.set_session(session_id, session_data):
             raise HTTPException(
                 status_code=500,
                 detail="Failed to create session"
@@ -223,12 +198,12 @@ async def login_post(
 
         response = JSONResponse(content={"success": True, "message": "Login successful"})
         response.set_cookie(
-            key=SessionConfig.COOKIE_NAME,
+            key="session_id",
             value=session_id,
-            httponly=SessionConfig.COOKIE_HTTPONLY,
-            secure=SessionConfig.COOKIE_SECURE,
-            samesite=SessionConfig.COOKIE_SAMESITE,
-            max_age=SessionConfig.SLIDING_WINDOW
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=3600
         )
         return response
 

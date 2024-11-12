@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 import random
 from enum import Enum
 import asyncio
-from session_config import SessionConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,6 +59,7 @@ class RedisManager:
         self.dlq_prefix = "dlq:"
         self.result_prefix = "result:"
         
+        self.session_ttl = 3600
         self.cache_ttl = 300
         self.rate_limit_ttl = 60
         self.result_ttl = 86400
@@ -118,37 +118,43 @@ class RedisManager:
 
     def _serialize_value(self, value: Any) -> str:
         try:
-            return json.dumps(value)
+            if isinstance(value, (dict, list)):
+                return json.dumps(value)
+            elif isinstance(value, (int, float, bool)):
+                return str(value)
+            elif isinstance(value, bytes):
+                return value.decode('utf-8')
+            return str(value)
         except Exception as e:
             logger.error(f"Error serializing value: {str(e)}")
             raise ValueError(f"Unable to serialize value: {str(e)}")
 
-    def _deserialize_value(self, value: Optional[bytes]) -> Optional[Dict]:
+    def _deserialize_value(self, value: Optional[bytes], default_type: Any = str) -> Any:
         if value is None:
             return None
         try:
-            return json.loads(value.decode('utf-8'))
+            str_value = value.decode('utf-8')
+            if default_type == bool:
+                return str_value.lower() == "true"
+            elif default_type == int:
+                return int(str_value)
+            elif default_type == float:
+                return float(str_value)
+            elif default_type in (dict, list):
+                return json.loads(str_value)
+            return str_value
+        except (ValueError, json.JSONDecodeError) as e:
+            logger.error(f"Error deserializing value: {e}")
+            return None
         except Exception as e:
-            logger.error(f"Error deserializing value: {str(e)}")
+            logger.error(f"Unexpected error during deserialization: {e}")
             return None
 
-    async def set_session(self, session_id: str, session_data: dict) -> bool:
+    def set_session(self, session_id: str, data: Dict, ttl: Optional[int] = None) -> bool:
         try:
             key = self._build_key(self.session_prefix, session_id)
-            
-            # Ensure required timestamp fields exist
-            current_time = time.time()
-            if 'created_at' not in session_data:
-                session_data['created_at'] = current_time
-            if 'last_refresh' not in session_data:
-                session_data['last_refresh'] = current_time
-            
-            return bool(self._retry_operation(
-                self.redis.set,
-                key,
-                self._serialize_value(session_data),
-                ex=SessionConfig.SLIDING_WINDOW
-            ))
+            serialized_data = self._serialize_value(data)
+            return bool(self._retry_operation(self.redis.set, key, serialized_data, ex=(ttl or self.session_ttl)))
         except Exception as e:
             logger.error(f"Error setting session: {str(e)}")
             return False
@@ -157,97 +163,20 @@ class RedisManager:
         try:
             key = self._build_key(self.session_prefix, session_id)
             data = self._retry_operation(self.redis.get, key)
-            return self._deserialize_value(data)
+            if data:
+                return self._deserialize_value(data, dict)
+            return None
         except Exception as e:
             logger.error(f"Error getting session: {str(e)}")
             return None
 
-    async def delete_session(self, session_id: str) -> bool:
+    def delete_session(self, session_id: str) -> bool:
         try:
             key = self._build_key(self.session_prefix, session_id)
             return bool(self._retry_operation(self.redis.delete, key))
         except Exception as e:
             logger.error(f"Error deleting session: {str(e)}")
             return False
-
-    async def refresh_session(self, session_id: str) -> bool:
-        try:
-            key = self._build_key(self.session_prefix, session_id)
-            session_data = self.get_session(session_id)
-            
-            if not session_data:
-                return False
-            
-            # Ensure timestamps exist and are valid
-            current_time = time.time()
-            created_at = session_data.get('created_at')
-            
-            if not created_at:
-                created_at = current_time
-                session_data['created_at'] = created_at
-
-            # Check absolute timeout
-            if current_time - created_at > SessionConfig.ABSOLUTE_MAX:
-                await self.delete_session(session_id)
-                return False
-            
-            # Update last refresh time
-            session_data['last_refresh'] = current_time
-            
-            return bool(self._retry_operation(
-                self.redis.set,
-                key,
-                self._serialize_value(session_data),
-                ex=SessionConfig.SLIDING_WINDOW
-            ))
-        except Exception as e:
-            logger.error(f"Error refreshing session: {str(e)}")
-            return False
-
-    async def cleanup_expired_sessions(self):
-        try:
-            pattern = f"{self.session_prefix}*"
-            cursor = 0
-            while True:
-                cursor, keys = self._retry_operation(self.redis.scan, cursor, match=pattern)
-                current_time = time.time()
-                
-                for key in keys:
-                    try:
-                        session_data = self._deserialize_value(
-                            self._retry_operation(self.redis.get, key)
-                        )
-                        
-                        if not session_data:
-                            # Invalid session data, remove it
-                            self._retry_operation(self.redis.delete, key)
-                            continue
-                        
-                        created_at = session_data.get('created_at')
-                        last_refresh = session_data.get('last_refresh')
-                        
-                        # Handle missing timestamps
-                        if not created_at or not last_refresh:
-                            logger.warning(f"Session {key} missing timestamps, removing")
-                            self._retry_operation(self.redis.delete, key)
-                            continue
-                        
-                        # Check both absolute and sliding window expiration
-                        if (current_time - created_at > SessionConfig.ABSOLUTE_MAX or
-                            current_time - last_refresh > SessionConfig.SLIDING_WINDOW):
-                            logger.info(f"Removing expired session {key}")
-                            self._retry_operation(self.redis.delete, key)
-                            
-                    except Exception as e:
-                        logger.error(f"Error processing session key {key}: {str(e)}")
-                        # Remove problematic session
-                        self._retry_operation(self.redis.delete, key)
-                        
-                if cursor == 0:
-                    break
-                    
-        except Exception as e:
-            logger.error(f"Error in session cleanup: {str(e)}")
 
     def check_rate_limit(self, resource: str, identifier: str) -> bool:
         try:
@@ -488,75 +417,3 @@ class RedisManager:
             "current_connections": len(self.pool._in_use_connections),
             "available_connections": len(self.pool._available_connections)
         }
-
-    async def set_session(self, session_id: str, session_data: dict) -> bool:
-        try:
-            key = self._build_key(self.session_prefix, session_id)
-            session_data['created_at'] = time.time()
-            session_data['last_refresh'] = time.time()
-            
-            return bool(self._retry_operation(
-                self.redis.set,
-                key,
-                self._serialize_value(session_data),
-                ex=self.session_ttl
-            ))
-        except Exception as e:
-            logger.error(f"Error setting session: {str(e)}")
-            return False
-
-    async def refresh_session(self, session_id: str) -> bool:
-        try:
-            key = self._build_key(self.session_prefix, session_id)
-            session_data = self.get_session(session_id)
-            
-            if not session_data:
-                return False
-                
-            created_at = session_data.get('created_at', time.time())
-            if time.time() - created_at > SessionConfig.ABSOLUTE_MAX:
-                await self.delete_session(session_id)
-                return False
-                
-            session_data['last_refresh'] = time.time()
-            return bool(self._retry_operation(
-                self.redis.set,
-                key,
-                self._serialize_value(session_data),
-                ex=self.session_ttl
-            ))
-        except Exception as e:
-            logger.error(f"Error refreshing session: {str(e)}")
-            return False
-
-    async def cleanup_expired_sessions(self):
-        try:
-            pattern = f"{self.session_prefix}*"
-            cursor = 0
-            while True:
-                cursor, keys = self._retry_operation(self.redis.scan, cursor, match=pattern)
-                current_time = time.time()
-                
-                for key in keys:
-                    try:
-                        session_data = self._deserialize_value(
-                            self._retry_operation(self.redis.get, key)
-                        )
-                        if not session_data:
-                            continue
-                            
-                        created_at = session_data.get('created_at')
-                        last_refresh = session_data.get('last_refresh')
-                        
-                        if (current_time - created_at > SessionConfig.ABSOLUTE_MAX or
-                            current_time - last_refresh > SessionConfig.SLIDING_WINDOW):
-                            self._retry_operation(self.redis.delete, key)
-                            
-                    except Exception as e:
-                        logger.error(f"Error processing session key {key}: {str(e)}")
-                        
-                if cursor == 0:
-                    break
-                    
-        except Exception as e:
-            logger.error(f"Error in session cleanup: {str(e)}")
