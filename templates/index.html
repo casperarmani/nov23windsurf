@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Analysis Chatbot</title>
     <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
     <link href="/static/styles.css" rel="stylesheet">
 </head>
 <body>
@@ -14,46 +15,131 @@
                 <div id="auth-section" class="mb-4">
                     <button id="logout-button" class="btn btn-danger" style="display: none;">
                         <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                        Logout
+                        <i class="fas fa-sign-out-alt"></i> Logout
                     </button>
                 </div>
-                <h1 class="mb-4">Video Analysis Chatbot</h1>
-                <div id="chat-container" class="mb-4" style="max-height: 400px; overflow-y: auto;">
+                <h1 class="mb-4">
+                    <i class="fas fa-robot"></i> Video Analysis Chatbot
+                </h1>
+                <div id="chat-container" class="mb-4">
                     <!-- Chat messages will appear here -->
                 </div>
                 <form id="chat-form" class="mb-4">
-                    <div class="mb-3">
+                    <div class="mb-3 position-relative">
                         <label for="message" class="form-label">Message</label>
-                        <textarea class="form-control" id="message" rows="3" required></textarea>
+                        <textarea class="form-control" id="message" rows="3" maxlength="1000" required></textarea>
+                        <div class="character-count">
+                            <span id="char-count">0</span>/1000
+                        </div>
                     </div>
                     <div class="mb-3">
-                        <label for="videos" class="form-label">Upload Videos (optional)</label>
+                        <label for="videos" class="form-label">
+                            <i class="fas fa-film"></i> Upload Videos (optional)
+                        </label>
                         <input type="file" class="form-control" id="videos" accept="video/*" multiple>
                     </div>
                     <div id="upload-info" class="mb-3 d-none">
                         <div class="alert alert-info">
-                            Selected files: <span id="file-count">0</span>
-                            <ul id="file-list" class="mb-0 mt-2"></ul>
+                            <i class="fas fa-info-circle"></i> Selected files: <span id="file-count">0</span>
+                            <div id="file-list" class="mt-2"></div>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary">Send</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Send
+                    </button>
                 </form>
             </div>
         </div>
         
         <div class="row mt-4">
             <div class="col-md-6">
-                <h3>Chat History</h3>
+                <h3><i class="fas fa-history"></i> Chat History</h3>
                 <div id="chat-history"></div>
             </div>
             <div class="col-md-6">
-                <h3>Video Analysis History</h3>
+                <h3><i class="fas fa-video"></i> Video Analysis History</h3>
                 <div id="video-analysis-history"></div>
             </div>
         </div>
     </div>
 
     <script>
+        // Character count functionality
+        const messageInput = document.getElementById('message');
+        const charCount = document.getElementById('char-count');
+        const maxLength = 1000;
+
+        messageInput.addEventListener('input', function() {
+            const remaining = this.value.length;
+            charCount.textContent = remaining;
+            
+            const charCountDiv = charCount.parentElement;
+            charCountDiv.classList.remove('near-limit', 'at-limit');
+            
+            if (remaining >= maxLength * 0.9) {
+                charCountDiv.classList.add('at-limit');
+            } else if (remaining >= maxLength * 0.8) {
+                charCountDiv.classList.add('near-limit');
+            }
+        });
+
+        // Enhanced file upload preview
+        document.getElementById('videos').addEventListener('change', function(e) {
+            const files = Array.from(e.target.files);
+            const fileCount = files.length;
+            const uploadInfo = document.getElementById('upload-info');
+            const fileList = document.getElementById('file-list');
+            
+            if (fileCount > 0) {
+                document.getElementById('file-count').textContent = fileCount;
+                fileList.innerHTML = '';
+                
+                files.forEach((file, index) => {
+                    const fileInfo = validateFile(file);
+                    const filePreview = document.createElement('div');
+                    filePreview.className = 'file-preview';
+                    
+                    filePreview.innerHTML = `
+                        <i class="fas fa-file-video file-icon"></i>
+                        <div class="file-info">
+                            <div>${file.name}</div>
+                            <small class="text-muted">${fileInfo.size}</small>
+                            ${!fileInfo.isValidType ? '<div class="text-danger">Invalid file type</div>' : ''}
+                        </div>
+                        <i class="fas fa-times remove-file" data-index="${index}"></i>
+                    `;
+                    
+                    if (!fileInfo.isValidType) {
+                        filePreview.classList.add('invalid-file');
+                    }
+                    
+                    fileList.appendChild(filePreview);
+                });
+                uploadInfo.classList.remove('d-none');
+                
+                // Add remove file functionality
+                document.querySelectorAll('.remove-file').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const index = parseInt(this.dataset.index);
+                        const dt = new DataTransfer();
+                        const input = document.getElementById('videos');
+                        
+                        for (let i = 0; i < input.files.length; i++) {
+                            if (i !== index) {
+                                dt.items.add(input.files[i]);
+                            }
+                        }
+                        
+                        input.files = dt.files;
+                        const event = new Event('change');
+                        input.dispatchEvent(event);
+                    });
+                });
+            } else {
+                uploadInfo.classList.add('d-none');
+            }
+        });
+
         // Session management and API request handling
         let isRefreshing = false;
         let failedQueue = [];
