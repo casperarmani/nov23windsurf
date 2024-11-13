@@ -76,7 +76,22 @@ async def startup_event():
     
     asyncio.create_task(cleanup_sessions())
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Only force HTTPS in production
+if os.getenv('ENVIRONMENT') == 'production':
+    app.add_middleware(HTTPSRedirectMiddleware)
+
+# Add security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "upgrade-insecure-requests"
+    return response
+
+# Mount static files with custom configuration
+app.mount("/static", StaticFiles(directory="static", html=True), name="static")
 templates = Jinja2Templates(directory="templates")
 chatbot = Chatbot()
 

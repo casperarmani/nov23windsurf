@@ -5,29 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Video Analysis Chatbot{% endblock %}</title>
     
-    <!-- Tailwind CSS & DaisyUI -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.2/dist/full.css" rel="stylesheet" type="text/css" />
+    <!-- Compiled Tailwind CSS -->
+    <link href="{{ url_for('static', path='css/dist/main.css') }}" rel="stylesheet">
     
-    <!-- Tailwind Configuration -->
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#1d4ed8',
-                        secondary: '#4b5563',
-                        accent: '#0ea5e9',
-                    }
-                }
-            },
-            daisyui: {
-                themes: ["light", "dark"],
-                darkTheme: "dark",
-            }
-        }
-    </script>
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    
+    <!-- Chart.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     {% block head %}{% endblock %}
 </head>
@@ -47,29 +35,42 @@
                     </label>
                 </div>
                 <div class="flex-1">
-                    <a class="btn btn-ghost normal-case text-xl">Video Analysis Chatbot</a>
+                    <a href="/" class="btn btn-ghost normal-case text-xl">Video Analysis Chatbot</a>
                 </div>
-                <div class="flex-none">
+                <div class="flex-none gap-2">
+                    <button id="theme-toggle" class="btn btn-ghost btn-circle">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                        </svg>
+                    </button>
                     <button id="logout-button" class="btn btn-ghost">Logout</button>
                 </div>
             </div>
             
             <!-- Page Content -->
-            <div class="p-4">
+            <div class="container mx-auto p-4">
                 {% block content %}{% endblock %}
             </div>
         </div>
         
         <!-- Sidebar -->
-        <div class="drawer-side">
+        <div class="drawer-side z-40">
             <label for="main-drawer" class="drawer-overlay"></label>
-            <aside class="bg-base-100 w-80 min-h-screen">
-                <div class="p-4">
-                    <h1 class="text-2xl font-bold mb-4">Video Analysis Chatbot</h1>
+            <aside class="bg-base-100 w-80 min-h-screen border-r border-base-300">
+                <div class="p-4 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h1 class="text-2xl font-bold">Video Analysis</h1>
+                        <button id="theme-toggle-sidebar" class="btn btn-ghost btn-circle lg:hidden">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                            </svg>
+                        </button>
+                    </div>
                     <div class="menu bg-base-100 rounded-box">
-                        <ul class="menu-vertical">
+                        <ul class="menu menu-vertical px-1">
                             <li><a href="/" class="{% if request.path == '/' %}active{% endif %}">Chat</a></li>
                             <li><a href="/history" class="{% if request.path == '/history' %}active{% endif %}">History</a></li>
+                            <li><a href="/settings" class="{% if request.path == '/settings' %}active{% endif %}">Settings</a></li>
                         </ul>
                     </div>
                 </div>
@@ -77,13 +78,45 @@
         </div>
     </div>
     
-    <!-- Scripts -->
-    <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <!-- Alpine.js -->
-    <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js"></script>
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // HTMX Error Handling
+        document.body.addEventListener('htmx:error', function(evt) {
+            console.error('HTMX Error:', evt.detail.error);
+            const toast = document.createElement('div');
+            toast.className = 'toast toast-end';
+            toast.innerHTML = `
+                <div class="alert alert-error">
+                    <span>An error occurred. Please try again.</span>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        });
+
+        // Theme Toggle
+        function setupThemeToggle(buttonId) {
+            const button = document.getElementById(buttonId);
+            if (button) {
+                button.addEventListener('click', function() {
+                    const html = document.documentElement;
+                    const currentTheme = html.getAttribute('data-theme');
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    html.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                });
+            }
+        }
+
+        // Initialize theme toggles
+        setupThemeToggle('theme-toggle');
+        setupThemeToggle('theme-toggle-sidebar');
+
+        // Set initial theme from localStorage
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        });
+    </script>
     
     {% block scripts %}{% endblock %}
 </body>

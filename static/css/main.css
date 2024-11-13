@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom component classes */
+@layer components {
+    .chat-message {
+        @apply mb-4 p-4 rounded-lg;
+    }
+
+    .chat-message.user {
+        @apply bg-primary/10 ml-8;
+    }
+
+    .chat-message.bot {
+        @apply bg-secondary/10 mr-8;
+    }
+
+    .chat-message.error {
+        @apply bg-error/10 text-error;
+    }
+
+    .prose {
+        @apply max-w-none;
+    }
+
+    .prose pre {
+        @apply bg-base-300 p-4 rounded-lg;
+    }
+}
+
+/* Custom utilities */
+@layer utilities {
+    .loading {
+        @apply opacity-70 pointer-events-none;
+    }
+}

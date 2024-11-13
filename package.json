@@ -1,0 +1,21 @@
+{
+  "name": "video-analysis-chatbot",
+  "version": "1.0.0",
+  "description": "Video Analysis Chatbot with modern UI",
+  "scripts": {
+    "build:css": "tailwindcss -i ./static/css/main.css -o ./static/css/dist/main.css --minify",
+    "watch:css": "tailwindcss -i ./static/css/main.css -o ./static/css/dist/main.css --watch",
+    "build": "npm run build:css",
+    "postinstall": "npm run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@tailwindcss/typography": "^0.5.15",
+    "autoprefixer": "^10.4.20",
+    "daisyui": "^4.12.14",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.14"
+  }
+}
