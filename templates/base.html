@@ -8,14 +8,10 @@
     <!-- Local CSS -->
     <link href="{{ url_for('static', path='css/dist/main.css') }}" rel="stylesheet">
     
-    <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    
-    <!-- Alpine.js -->
-    <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js"></script>
-    
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Core Libraries (Local) -->
+    <script src="{{ url_for('static', path='js/htmx.min.js') }}"></script>
+    <script src="{{ url_for('static', path='js/alpine.min.js') }}" defer></script>
+    <script src="{{ url_for('static', path='js/chart.min.js') }}"></script>
     
     {% block head %}{% endblock %}
 </head>
@@ -80,73 +76,77 @@
     
     <!-- Theme Management -->
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const themeManager = {
-                init() {
-                    this.setupThemeToggle('theme-toggle');
-                    this.setupThemeToggle('theme-toggle-sidebar');
-                    this.loadSavedTheme();
-                    this.setupLogoutButton();
-                },
+    document.addEventListener('DOMContentLoaded', () => {
+        class ThemeManager {
+            constructor() {
+                this.init();
+            }
 
-                setupThemeToggle(buttonId) {
-                    const button = document.getElementById(buttonId);
-                    if (button) {
-                        button.addEventListener('click', () => this.toggleTheme());
-                    }
-                },
+            init() {
+                this.setupThemeToggle('theme-toggle');
+                this.setupThemeToggle('theme-toggle-sidebar');
+                this.loadSavedTheme();
+                this.setupLogoutButton();
+            }
 
-                toggleTheme() {
-                    const html = document.documentElement;
-                    const currentTheme = html.getAttribute('data-theme');
-                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                    html.setAttribute('data-theme', newTheme);
-                    localStorage.setItem('theme', newTheme);
-                },
-
-                loadSavedTheme() {
-                    const savedTheme = localStorage.getItem('theme') || 'dark';
-                    document.documentElement.setAttribute('data-theme', savedTheme);
-                },
-
-                setupLogoutButton() {
-                    const logoutButton = document.getElementById('logout-button');
-                    if (logoutButton) {
-                        logoutButton.addEventListener('click', async () => {
-                            try {
-                                const response = await fetch('/logout', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json'
-                                    }
-                                });
-                                if (response.ok) {
-                                    window.location.href = '/login';
-                                }
-                            } catch (error) {
-                                console.error('Logout failed:', error);
-                            }
-                        });
-                    }
+            setupThemeToggle(buttonId) {
+                const button = document.getElementById(buttonId);
+                if (button) {
+                    button.addEventListener('click', () => this.toggleTheme());
                 }
-            };
+            }
 
-            themeManager.init();
-        });
+            toggleTheme() {
+                const html = document.documentElement;
+                const currentTheme = html.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                html.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+            }
 
-        // HTMX Error Handling
-        document.body.addEventListener('htmx:error', (evt) => {
-            console.error('HTMX Error:', evt.detail.error);
-            const toast = document.createElement('div');
-            toast.className = 'toast toast-end';
-            toast.innerHTML = `
-                <div class="alert alert-error">
-                    <span>An error occurred. Please try again.</span>
-                </div>
-            `;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
-        });
+            loadSavedTheme() {
+                const savedTheme = localStorage.getItem('theme') || 'dark';
+                document.documentElement.setAttribute('data-theme', savedTheme);
+            }
+
+            setupLogoutButton() {
+                const logoutButton = document.getElementById('logout-button');
+                if (logoutButton) {
+                    logoutButton.addEventListener('click', async () => {
+                        try {
+                            const response = await fetch('/logout', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            if (response.ok) {
+                                window.location.href = '/login';
+                            }
+                        } catch (error) {
+                            console.error('Logout failed:', error);
+                        }
+                    });
+                }
+            }
+        }
+
+        new ThemeManager();
+    });
+
+    // HTMX Error Handling
+    document.body.addEventListener('htmx:error', (evt) => {
+        console.error('HTMX Error:', evt.detail.error);
+        const toast = document.createElement('div');
+        toast.className = 'toast toast-end';
+        toast.innerHTML = `
+            <div class="alert alert-error">
+                <span>An error occurred. Please try again.</span>
+            </div>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    });
     </script>
     
     {% block scripts %}{% endblock %}

@@ -439,7 +439,12 @@ async def send_message(
         cache_key = f"chat_history:{user['id']}"
         redis_manager.invalidate_cache(cache_key)
         
-        return JSONResponse(content={"response": response_text})
+        # Return the rendered chat messages template instead of JSON
+        history = await get_chat_history(uuid.UUID(user['id']))
+        return templates.TemplateResponse(
+            "partials/chat_messages.html",
+            {"request": request, "messages": history}
+        )
         
     except Exception as e:
         logger.error(f"Error processing message: {str(e)}")

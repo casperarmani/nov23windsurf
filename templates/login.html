@@ -3,44 +3,49 @@
 {% block title %}Login - Video Analysis Chatbot{% endblock %}
 
 {% block content %}
-<div class="min-h-screen flex items-center justify-center">
-    <div class="card bg-base-100 shadow-xl w-full max-w-md">
+<div class="min-h-screen flex items-center justify-center bg-base-200 px-4">
+    <div class="card w-full max-w-md bg-base-100 shadow-xl">
         <div class="card-body">
             <h2 class="card-title text-2xl font-bold mb-6 justify-center">Login</h2>
             
-            <div id="error-message" class="alert alert-error hidden"></div>
+            <div id="error-message" class="alert alert-error hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span></span>
+            </div>
             
             <form id="login-form" class="space-y-4"
                   x-data="{ email: '', password: '', isLoading: false }"
                   @submit.prevent="isLoading = true">
                 
-                <div class="form-control">
+                <div class="form-control w-full">
                     <label class="label">
                         <span class="label-text">Email</span>
                     </label>
                     <input type="email" 
                            x-model="email"
                            name="email" 
-                           class="input input-bordered" 
+                           class="input input-bordered w-full" 
                            required>
                 </div>
                 
-                <div class="form-control">
+                <div class="form-control w-full">
                     <label class="label">
                         <span class="label-text">Password</span>
                     </label>
                     <input type="password" 
                            x-model="password"
                            name="password" 
-                           class="input input-bordered" 
+                           class="input input-bordered w-full" 
                            required>
                 </div>
                 
                 <div class="form-control mt-6">
                     <button type="submit" 
-                            class="btn btn-primary"
+                            class="btn btn-primary w-full"
+                            :class="{ 'loading': isLoading }"
                             :disabled="isLoading">
-                        <span class="loading loading-spinner" x-show="isLoading"></span>
                         <span x-text="isLoading ? 'Logging in...' : 'Login'"></span>
                     </button>
                 </div>
@@ -48,7 +53,7 @@
                 <div class="divider">OR</div>
                 
                 <div class="form-control">
-                    <a href="/signup" class="btn btn-outline btn-secondary">Sign Up</a>
+                    <a href="/signup" class="btn btn-outline btn-secondary w-full">Sign Up</a>
                 </div>
             </form>
         </div>
@@ -74,12 +79,12 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         if (data.success) {
             window.location.href = '/';
         } else {
-            errorMessage.textContent = data.message;
+            errorMessage.querySelector('span').textContent = data.message;
             errorMessage.classList.remove('hidden');
         }
     } catch (error) {
         console.error('Error:', error);
-        errorMessage.textContent = 'An error occurred during login';
+        errorMessage.querySelector('span').textContent = 'An error occurred during login';
         errorMessage.classList.remove('hidden');
     }
 });

@@ -2,23 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+    html {
+        @apply antialiased;
+    }
+
+    body {
+        @apply min-h-screen bg-base-200 text-base-content;
+    }
+}
+
 @layer components {
     /* Form Controls */
     .form-control {
-        @apply w-full max-w-full;
+        @apply w-full;
+    }
+
+    .input {
+        @apply bg-base-100 text-base-content;
     }
 
     .input-bordered {
-        @apply border-2 border-base-300;
+        @apply border-2 border-base-300 focus:border-primary focus:ring-2 focus:ring-primary/20;
     }
 
     /* Card Styles */
     .card {
-        @apply rounded-xl shadow-lg;
+        @apply bg-base-100 rounded-xl shadow-xl;
     }
 
     .card-body {
-        @apply p-6 space-y-4;
+        @apply p-6;
     }
 
     /* Chat Styles */
@@ -26,25 +40,33 @@
         @apply h-[32rem] overflow-y-auto space-y-4 p-4 rounded-lg bg-base-200;
     }
 
-    .chat-message {
-        @apply p-4 rounded-lg;
+    .chat {
+        @apply grid grid-cols-[auto_1fr] gap-x-3 py-2;
     }
 
-    .chat-message.user {
-        @apply bg-primary/10 ml-8;
+    .chat-bubble {
+        @apply relative px-4 py-2 rounded-lg max-w-[80%];
     }
 
-    .chat-message.bot {
-        @apply bg-secondary/10 mr-8;
+    .chat-bubble-primary {
+        @apply bg-primary text-primary-content;
     }
 
-    .chat-message.error {
-        @apply bg-error/10 text-error;
+    .chat-bubble-secondary {
+        @apply bg-secondary text-secondary-content;
+    }
+
+    .chat-start {
+        @apply justify-start;
+    }
+
+    .chat-end {
+        @apply justify-end;
     }
 
     /* Button Styles */
     .btn {
-        @apply normal-case;
+        @apply normal-case font-semibold transition-all duration-200;
     }
 
     .btn-primary {
@@ -53,6 +75,10 @@
 
     .btn-secondary {
         @apply bg-secondary hover:bg-secondary-focus text-secondary-content;
+    }
+
+    .btn-outline {
+        @apply border-2 bg-transparent hover:bg-base-200;
     }
 
     /* Navigation */
@@ -68,26 +94,44 @@
         @apply bg-primary text-primary-content;
     }
 
-    /* Prose Styles */
-    .prose {
-        @apply max-w-none;
-        @apply prose-headings:text-base-content;
-        @apply prose-p:text-base-content;
-        @apply prose-strong:text-base-content;
-        @apply prose-ul:text-base-content;
-        @apply prose-ol:text-base-content;
+    /* Alerts */
+    .alert {
+        @apply rounded-lg border-l-4 p-4 flex items-center gap-2;
     }
 
-    .prose pre {
-        @apply bg-base-300 p-4 rounded-lg;
+    .alert-error {
+        @apply bg-error/10 border-error text-error;
     }
-}
 
-@layer utilities {
+    .alert-info {
+        @apply bg-info/10 border-info text-info;
+    }
+
+    /* Loading States */
     .loading {
         @apply opacity-70 pointer-events-none;
     }
 
+    /* Divider */
+    .divider {
+        @apply flex items-center text-base-content/60 my-4;
+    }
+
+    .divider:before,
+    .divider:after {
+        @apply content-[''] flex-1 h-0.5 bg-base-300;
+    }
+
+    .divider:before {
+        @apply mr-4;
+    }
+
+    .divider:after {
+        @apply ml-4;
+    }
+}
+
+@layer utilities {
     .transition-fade {
         @apply transition-opacity duration-300;
     }
