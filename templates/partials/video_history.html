@@ -1,0 +1,14 @@
+<div class="space-y-4">
+    {% for video in videos %}
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h3 class="card-title">{{ video.upload_file_name }}</h3>
+            <p class="text-sm opacity-70">{{ video.TIMESTAMP.strftime('%B %d, %Y %I:%M %p') }}</p>
+            <div class="divider"></div>
+            <div class="prose">
+                {{ video.analysis }}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
