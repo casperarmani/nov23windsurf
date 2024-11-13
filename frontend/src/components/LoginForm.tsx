@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -15,14 +16,20 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   });
   const [error, setError] = useState<string | null>(null);
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     
     try {
-      await login(formData.username, formData.password);
-      onSuccess?.();
+      const result = await login(formData.username, formData.password);
+      if (result.success) {
+        onSuccess?.();
+        navigate("/"); // Redirect to home page after successful login
+      } else {
+        setError(result.message || "Login failed");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     }
