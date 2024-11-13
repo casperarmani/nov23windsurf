@@ -76,22 +76,7 @@ async def startup_event():
     
     asyncio.create_task(cleanup_sessions())
 
-# Only force HTTPS in production
-if os.getenv('ENVIRONMENT') == 'production':
-    app.add_middleware(HTTPSRedirectMiddleware)
-
-# Add security headers middleware
-@app.middleware("http")
-async def add_security_headers(request: Request, call_next):
-    response = await call_next(request)
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Content-Security-Policy"] = "upgrade-insecure-requests"
-    return response
-
-# Mount static files with custom configuration
-app.mount("/static", StaticFiles(directory="static", html=True), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 chatbot = Chatbot()
 
@@ -265,22 +250,11 @@ async def index(request: Request):
     user = await get_current_user(request, return_none=True)
     if not user:
         return RedirectResponse(url="/login", status_code=302)
-    return templates.TemplateResponse("chat.html", {"request": request})
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get('/login', response_class=HTMLResponse)
 async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
-
-@app.get('/signup', response_class=HTMLResponse)
-async def signup_page(request: Request):
-    return templates.TemplateResponse("signup.html", {"request": request})
-
-@app.get('/history', response_class=HTMLResponse)
-async def history_page(request: Request):
-    user = await get_current_user(request, return_none=True)
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    return templates.TemplateResponse("history.html", {"request": request})
 
 @app.get("/chat_history")
 async def get_chat_history_endpoint(request: Request):
@@ -439,35 +413,11 @@ async def send_message(
         cache_key = f"chat_history:{user['id']}"
         redis_manager.invalidate_cache(cache_key)
         
-        # Return the rendered chat messages template instead of JSON
-        history = await get_chat_history(uuid.UUID(user['id']))
-        return templates.TemplateResponse(
-            "partials/chat_messages.html",
-            {"request": request, "messages": history}
-        )
+        return JSONResponse(content={"response": response_text})
         
     except Exception as e:
         logger.error(f"Error processing message: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
-# Add new HTMX-specific routes for partial updates
-@app.get("/partials/chat-messages")
-async def chat_messages_partial(request: Request):
-    user = await get_current_user(request)
-    history = await get_chat_history(uuid.UUID(user['id']))
-    return templates.TemplateResponse(
-        "partials/chat_messages.html",
-        {"request": request, "messages": history}
-    )
-
-@app.get("/partials/video-history")
-async def video_history_partial(request: Request):
-    user = await get_current_user(request)
-    history = await get_video_analysis_history(uuid.UUID(user['id']))
-    return templates.TemplateResponse(
-        "partials/video_history.html",
-        {"request": request, "videos": history}
-    )
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)

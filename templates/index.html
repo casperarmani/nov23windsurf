@@ -1,134 +1,329 @@
-{% extends "base.html" %}
-
-{% block title %}Video Analysis Chatbot{% endblock %}
-
-{% block content %}
-<div class="container mx-auto max-w-4xl"
-     x-data="{ message: '', files: [], isLoading: false }">
-    <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-            <!-- Chat Messages -->
-            <div id="chat-container" 
-                 class="h-96 overflow-y-auto space-y-4 mb-4"
-                 hx-get="/partials/chat-messages"
-                 hx-trigger="load, newMessage from:body"
-                 hx-swap="innerHTML">
-            </div>
-
-            <!-- Chat Form -->
-            <form class="space-y-4"
-                  @submit.prevent="isLoading = true"
-                  hx-post="/send_message"
-                  hx-encoding="multipart/form-data"
-                  hx-trigger="submit"
-                  hx-indicator="#loading-indicator"
-                  hx-on::after-request="isLoading = false; message = ''; $refs.fileInput.value = ''; files = []"
-                  hx-on::after-receive="document.body.dispatchEvent(new Event('newMessage'))">
-
-                <!-- Loading Indicator -->
-                <div id="loading-indicator" class="htmx-indicator">
-                    <div class="flex justify-center">
-                        <span class="loading loading-spinner loading-lg"></span>
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Analysis Chatbot</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <link href="/static/styles.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container py-4">
+        <div class="row">
+            <div class="col-md-8 mx-auto">
+                <div id="auth-section" class="mb-4">
+                    <button id="logout-button" class="btn btn-danger" style="display: none;">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        Logout
+                    </button>
+                </div>
+                <h1 class="mb-4">Video Analysis Chatbot</h1>
+                <div id="chat-container" class="mb-4" style="max-height: 400px; overflow-y: auto;">
+                    <!-- Chat messages will appear here -->
+                </div>
+                <form id="chat-form" class="mb-4">
+                    <div class="mb-3">
+                        <label for="message" class="form-label">Message</label>
+                        <textarea class="form-control" id="message" rows="3" required></textarea>
                     </div>
-                </div>
-
-                <!-- Message Input -->
-                <div class="form-control">
-                    <label class="label">
-                        <span class="label-text">Message</span>
-                    </label>
-                    <textarea 
-                        class="textarea textarea-bordered h-24" 
-                        x-model="message"
-                        name="message"
-                        placeholder="Type your message here..."
-                        required></textarea>
-                </div>
-
-                <!-- File Upload -->
-                <div class="form-control">
-                    <label class="label">
-                        <span class="label-text">Upload Videos (optional)</span>
-                    </label>
-                    <input 
-                        type="file"
-                        class="file-input file-input-bordered w-full"
-                        accept="video/*"
-                        multiple
-                        name="videos"
-                        x-ref="fileInput"
-                        @change="files = Array.from($event.target.files)">
-
-                    <!-- File List -->
-                    <div x-show="files.length > 0" class="mt-2">
+                    <div class="mb-3">
+                        <label for="videos" class="form-label">Upload Videos (optional)</label>
+                        <input type="file" class="form-control" id="videos" accept="video/*" multiple>
+                    </div>
+                    <div id="upload-info" class="mb-3 d-none">
                         <div class="alert alert-info">
-                            <div>
-                                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <div>
-                                    <p x-text="'Selected files: ' + files.length"></p>
-                                    <ul class="mt-2 list-disc list-inside">
-                                        <template x-for="file in files" :key="file.name">
-                                            <li>
-                                                <span x-text="file.name"></span>
-                                                (<span x-text="(file.size / (1024 * 1024)).toFixed(2) + ' MB'"></span>)
-                                            </li>
-                                        </template>
-                                    </ul>
-                                </div>
-                            </div>
+                            Selected files: <span id="file-count">0</span>
+                            <ul id="file-list" class="mb-0 mt-2"></ul>
                         </div>
                     </div>
-                </div>
-
-                <!-- Submit Button -->
-                <button 
-                    type="submit"
-                    class="btn btn-primary w-full"
-                    :disabled="isLoading || (!message && files.length === 0)">
-                    <span class="loading loading-spinner" x-show="isLoading"></span>
-                    <span x-text="isLoading ? 'Sending...' : 'Send'"></span>
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <!-- History Section -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-8">
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-                <h2 class="card-title">Chat History</h2>
-                <div id="chat-history"
-                     hx-get="/partials/chat-history"
-                     hx-trigger="load, newMessage from:body"
-                     hx-swap="innerHTML">
-                </div>
+                    <button type="submit" class="btn btn-primary">Send</button>
+                </form>
             </div>
         </div>
-
-        <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-                <h2 class="card-title">Video Analysis History</h2>
-                <div id="video-history"
-                     hx-get="/partials/video-history"
-                     hx-trigger="load, newMessage from:body"
-                     hx-swap="innerHTML">
-                </div>
+        
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <h3>Chat History</h3>
+                <div id="chat-history"></div>
+            </div>
+            <div class="col-md-6">
+                <h3>Video Analysis History</h3>
+                <div id="video-analysis-history"></div>
             </div>
         </div>
     </div>
-</div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-    // Initialize HTMX events
-    document.body.addEventListener('htmx:afterSwap', function(event) {
-        const chatContainer = document.getElementById('chat-container');
-        if (chatContainer) {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+    <script>
+        // Session management and API request handling
+        let isRefreshing = false;
+        let failedQueue = [];
+
+        function processQueue(error, token = null) {
+            failedQueue.forEach(prom => {
+                if (error) {
+                    prom.reject(error);
+                } else {
+                    prom.resolve(token);
+                }
+            });
+            failedQueue = [];
         }
-    });
-</script>
-{% endblock %}
+
+        async function refreshToken() {
+            try {
+                const response = await fetch('/refresh_token', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!response.ok) {
+                    throw new Error('Token refresh failed');
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('Error refreshing token:', error);
+                throw error;
+            }
+        }
+
+        async function handleApiRequest(url, options = {}) {
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    credentials: 'include'
+                });
+
+                if (response.status === 401) {
+                    if (!isRefreshing) {
+                        isRefreshing = true;
+                        try {
+                            await refreshToken();
+                            isRefreshing = false;
+                            processQueue(null);
+                            // Retry the original request
+                            return await fetch(url, {
+                                ...options,
+                                credentials: 'include'
+                            });
+                        } catch (error) {
+                            isRefreshing = false;
+                            processQueue(error);
+                            window.location.href = '/login';
+                            throw error;
+                        }
+                    } else {
+                        // Wait for the token refresh
+                        return new Promise((resolve, reject) => {
+                            failedQueue.push({ resolve, reject });
+                        }).then(() => {
+                            return fetch(url, {
+                                ...options,
+                                credentials: 'include'
+                            });
+                        });
+                    }
+                }
+                return response;
+            } catch (error) {
+                console.error('API request error:', error);
+                throw error;
+            }
+        }
+
+        // Session keepalive
+        function startSessionKeepalive() {
+            setInterval(async () => {
+                try {
+                    const response = await handleApiRequest('/auth_status');
+                    if (!response.ok) {
+                        console.error('Session keepalive failed');
+                    }
+                } catch (error) {
+                    console.error('Session keepalive error:', error);
+                }
+            }, 300000); // Ping every 5 minutes
+        }
+
+        // File validation
+        const VALID_VIDEO_TYPES = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo'];
+        
+        function validateFile(file) {
+            return {
+                name: file.name,
+                type: file.type,
+                size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
+                isValidType: VALID_VIDEO_TYPES.includes(file.type)
+            };
+        }
+
+        document.getElementById('videos').addEventListener('change', function(e) {
+            const files = Array.from(e.target.files);
+            const fileCount = files.length;
+            const uploadInfo = document.getElementById('upload-info');
+            const fileList = document.getElementById('file-list');
+            
+            if (fileCount > 0) {
+                document.getElementById('file-count').textContent = fileCount;
+                fileList.innerHTML = '';
+                
+                files.forEach((file, index) => {
+                    const fileInfo = validateFile(file);
+                    const li = document.createElement('li');
+                    li.textContent = `${file.name} (${fileInfo.size})`;
+                    
+                    if (!fileInfo.isValidType) {
+                        li.classList.add('text-danger');
+                        li.textContent += ' - Invalid file type';
+                    }
+                    
+                    fileList.appendChild(li);
+                });
+                uploadInfo.classList.remove('d-none');
+            } else {
+                uploadInfo.classList.add('d-none');
+            }
+        });
+
+        document.getElementById('chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const messageInput = form.querySelector('#message');
+            const videoInput = form.querySelector('#videos');
+            const files = Array.from(videoInput.files);
+            
+            const formData = new FormData();
+            formData.append('message', messageInput.value);
+            
+            files.forEach((file, index) => {
+                const fileInfo = validateFile(file);
+                if (fileInfo.isValidType) {
+                    formData.append('videos', file);
+                }
+            });
+
+            try {
+                form.classList.add('loading');
+                const response = await handleApiRequest('/send_message', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.response) {
+                    const chatContainer = document.getElementById('chat-container');
+                    chatContainer.innerHTML += `
+                        <div class="chat-message user">${messageInput.value}</div>
+                        <div class="chat-message bot">${data.response}</div>
+                    `;
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+                
+                messageInput.value = '';
+                videoInput.value = '';
+                document.getElementById('upload-info').classList.add('d-none');
+                await loadHistory();
+            } catch (error) {
+                console.error('Error:', error);
+                const chatContainer = document.getElementById('chat-container');
+                chatContainer.innerHTML += `
+                    <div class="chat-message error">An error occurred. Please try again.</div>
+                `;
+            } finally {
+                form.classList.remove('loading');
+            }
+        });
+
+        async function loadHistory() {
+            try {
+                const [chatResponse, videoResponse] = await Promise.all([
+                    handleApiRequest('/chat_history'),
+                    handleApiRequest('/video_analysis_history')
+                ]);
+
+                if (!chatResponse.ok || !videoResponse.ok) {
+                    throw new Error('One or more requests failed');
+                }
+
+                const [chatData, videoData] = await Promise.all([
+                    chatResponse.json(),
+                    videoResponse.json()
+                ]);
+
+                document.getElementById('chat-history').innerHTML = chatData.history.length > 0
+                    ? chatData.history.map(msg => `
+                        <div class="chat-history-item">
+                            <small class="text-muted">${new Date(msg.TIMESTAMP).toLocaleString('en-US', { timeZone: 'UTC' })}</small><br>
+                            <strong>${msg.chat_type === 'bot' ? 'Chatbot' : 'You'}:</strong> ${msg.message}
+                        </div>
+                    `).join('')
+                    : '<div class="alert alert-info">No chat history available</div>';
+                
+                document.getElementById('video-analysis-history').innerHTML = videoData.history.length > 0
+                    ? videoData.history.map(analysis => `
+                        <div class="video-analysis-item">
+                            <small class="text-muted">${new Date(analysis.TIMESTAMP).toLocaleString('en-US', { timeZone: 'UTC' })}</small><br>
+                            <strong>File:</strong> ${analysis.upload_file_name}<br>
+                            <strong>Analysis:</strong> ${analysis.analysis}
+                        </div>
+                    `).join('')
+                    : '<div class="alert alert-info">No video analysis history available</div>';
+            } catch (error) {
+                console.error('Error loading history:', error);
+                const errorMessage = '<div class="alert alert-danger">Error loading history. Please refresh the page.</div>';
+                document.getElementById('chat-history').innerHTML = errorMessage;
+                document.getElementById('video-analysis-history').innerHTML = errorMessage;
+            }
+        }
+
+        // Check authentication status on page load
+        checkAuthStatus();
+        startSessionKeepalive();
+
+        async function checkAuthStatus() {
+            try {
+                const response = await handleApiRequest('/auth_status');
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    document.getElementById('logout-button').style.display = 'block';
+                    await loadHistory();
+                } else {
+                    if (!window.location.pathname.includes('/login')) {
+                        window.location.href = '/login';
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+                if (!window.location.pathname.includes('/login')) {
+                    window.location.href = '/login';
+                }
+            }
+        }
+
+        document.getElementById('logout-button').addEventListener('click', async function() {
+            const spinner = this.querySelector('.spinner-border');
+            spinner.classList.remove('d-none');
+            this.disabled = true;
+
+            try {
+                const response = await handleApiRequest('/logout', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = '/login';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            } finally {
+                spinner.classList.add('d-none');
+                this.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

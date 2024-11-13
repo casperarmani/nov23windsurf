@@ -1,92 +1,65 @@
-{% extends "base.html" %}
-
-{% block title %}Login - Video Analysis Chatbot{% endblock %}
-
-{% block content %}
-<div class="min-h-screen flex items-center justify-center bg-base-200 px-4">
-    <div class="card w-full max-w-md bg-base-100 shadow-xl">
-        <div class="card-body">
-            <h2 class="card-title text-2xl font-bold mb-6 justify-center">Login</h2>
-            
-            <div id="error-message" class="alert alert-error hidden">
-                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span></span>
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Video Analysis Chatbot</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <link href="/static/styles.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <h1 class="mb-4 text-center">Login</h1>
+                <div id="error-message" class="alert alert-danger d-none"></div>
+                <form id="login-form">
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Login</button>
+                        <a href="/signup" class="btn btn-secondary">Sign Up</a>
+                    </div>
+                </form>
             </div>
-            
-            <form id="login-form" class="space-y-4"
-                  x-data="{ email: '', password: '', isLoading: false }"
-                  @submit.prevent="isLoading = true">
-                
-                <div class="form-control w-full">
-                    <label class="label">
-                        <span class="label-text">Email</span>
-                    </label>
-                    <input type="email" 
-                           x-model="email"
-                           name="email" 
-                           class="input input-bordered w-full" 
-                           required>
-                </div>
-                
-                <div class="form-control w-full">
-                    <label class="label">
-                        <span class="label-text">Password</span>
-                    </label>
-                    <input type="password" 
-                           x-model="password"
-                           name="password" 
-                           class="input input-bordered w-full" 
-                           required>
-                </div>
-                
-                <div class="form-control mt-6">
-                    <button type="submit" 
-                            class="btn btn-primary w-full"
-                            :class="{ 'loading': isLoading }"
-                            :disabled="isLoading">
-                        <span x-text="isLoading ? 'Logging in...' : 'Login'"></span>
-                    </button>
-                </div>
-                
-                <div class="divider">OR</div>
-                
-                <div class="form-control">
-                    <a href="/signup" class="btn btn-outline btn-secondary w-full">Sign Up</a>
-                </div>
-            </form>
         </div>
     </div>
-</div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-document.getElementById('login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = e.target;
-    const errorMessage = document.getElementById('error-message');
-    const formData = new FormData(form);
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const errorMessage = document.getElementById('error-message');
+            const formData = new FormData(form);
 
-    try {
-        const response = await fetch('/login', {
-            method: 'POST',
-            body: formData
+            try {
+                form.classList.add('loading');
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = '/';
+                } else {
+                    errorMessage.textContent = data.message;
+                    errorMessage.classList.remove('d-none');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                errorMessage.textContent = 'An error occurred during login';
+                errorMessage.classList.remove('d-none');
+            } finally {
+                form.classList.remove('loading');
+            }
         });
-        
-        const data = await response.json();
-        if (data.success) {
-            window.location.href = '/';
-        } else {
-            errorMessage.querySelector('span').textContent = data.message;
-            errorMessage.classList.remove('hidden');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        errorMessage.querySelector('span').textContent = 'An error occurred during login';
-        errorMessage.classList.remove('hidden');
-    }
-});
-</script>
-{% endblock %}
+    </script>
+</body>
+</html>
