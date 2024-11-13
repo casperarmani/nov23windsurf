@@ -1,6 +1,6 @@
 import os
 from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request, BackgroundTasks
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security import OAuth2AuthorizationCodeBearer
@@ -76,13 +76,17 @@ async def startup_event():
     
     asyncio.create_task(cleanup_sessions())
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
-chatbot = Chatbot()
+# Configure CORS with specific origin
+origins = [
+    "http://localhost:5173",
+    "http://localhost:3100",
+    "http://0.0.0.0:5173",
+    "http://0.0.0.0:3100",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -93,6 +97,12 @@ app.add_middleware(
     TrustedHostMiddleware,
     allowed_hosts=["*"]
 )
+
+# Mount static files and templates
+app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
+templates = Jinja2Templates(directory="templates")
+chatbot = Chatbot()
 
 async def get_current_user(request: Request, return_none=False):
     try:
@@ -246,11 +256,8 @@ async def auth_status(request: Request):
         )
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    user = await get_current_user(request, return_none=True)
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    return templates.TemplateResponse("index.html", {"request": request})
+async def serve_react_app(request: Request):
+    return FileResponse("static/react/index.html")
 
 @app.get('/login', response_class=HTMLResponse)
 async def login_page(request: Request):
@@ -420,4 +427,4 @@ async def send_message(
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=3100, reload=True)
