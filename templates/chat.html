@@ -33,6 +33,13 @@
                       hx-on::after-request="isLoading = false; message = ''; $refs.fileInput.value = ''; files = []"
                       hx-on::after-receive="document.body.dispatchEvent(new Event('newMessage'))">
                     
+                    <!-- Loading Indicator -->
+                    <div id="loading-indicator" class="htmx-indicator">
+                        <div class="flex justify-center items-center">
+                            <div class="loading loading-spinner loading-lg"></div>
+                        </div>
+                    </div>
+                    
                     <!-- Message Input -->
                     <div class="form-control">
                         <textarea 
