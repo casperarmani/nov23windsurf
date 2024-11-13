@@ -79,9 +79,7 @@ async def startup_event():
 # Configure CORS with specific origin
 origins = [
     "http://localhost:5173",
-    "http://localhost:3100",
     "http://0.0.0.0:5173",
-    "http://0.0.0.0:3100",
 ]
 
 app.add_middleware(
@@ -427,4 +425,4 @@ async def send_message(
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=3100, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)
