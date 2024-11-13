@@ -1,46 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import LoginForm from './components/LoginForm';
+import ProtectedRoute from './components/ProtectedRoute';
 import ChatContainer from './components/ChatContainer';
 import VideoUpload from './components/VideoUpload';
 import History from './components/History';
+import axios from 'axios';
 
 // Configure axios defaults
 axios.defaults.withCredentials = true;
-axios.defaults.baseURL = '/'; // Use relative URLs for API calls
+axios.defaults.baseURL = '/';
 
-function App() {
-  const [user, setUser] = useState(null);
-  const [chatHistory, setChatHistory] = useState([]);
-  const [videoHistory, setVideoHistory] = useState([]);
-  const [error, setError] = useState(null);
+function MainContent() {
+  const [chatHistory, setChatHistory] = React.useState([]);
+  const [videoHistory, setVideoHistory] = React.useState([]);
+  const [error, setError] = React.useState(null);
 
-  useEffect(() => {
-    checkAuth();
+  React.useEffect(() => {
+    fetchHistories();
   }, []);
-
-  useEffect(() => {
-    if (user) {
-      fetchHistories();
-    }
-  }, [user]);
-
-  const checkAuth = async () => {
-    try {
-      const response = await axios.get('/auth_status');
-      if (response.data.authenticated) {
-        setUser(response.data.user);
-        setError(null);
-      } else {
-        window.location.href = '/login';
-      }
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      setError('Authentication failed. Please try again.');
-      setTimeout(() => {
-        window.location.href = '/login';
-      }, 2000);
-    }
-  };
 
   const fetchHistories = async () => {
     try {
@@ -57,32 +36,6 @@ function App() {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await axios.post('/logout');
-      window.location.href = '/login';
-    } catch (error) {
-      console.error('Logout failed:', error);
-      setError('Logout failed. Please try again.');
-    }
-  };
-
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          {error ? (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-              {error}
-            </div>
-          ) : (
-            <div className="animate-pulse">Loading...</div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="container mx-auto px-4 py-8">
       {error && (
@@ -91,16 +44,6 @@ function App() {
         </div>
       )}
 
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Video Analysis Chatbot</h1>
-        <button
-          onClick={handleLogout}
-          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition-colors"
-        >
-          Logout
-        </button>
-      </div>
-      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
           <ChatContainer onMessageSent={fetchHistories} />
@@ -115,6 +58,29 @@ function App() {
         </div>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <div className="min-h-screen bg-gray-50">
+          <Routes>
+            <Route path="/login" element={<LoginForm />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <MainContent />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </div>
+      </AuthProvider>
+    </Router>
   );
 }
 
