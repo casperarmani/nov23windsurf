@@ -8,21 +8,31 @@ runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
-mode = "manual"
+mode = "parallel"
 author = "agent"
 
 [[workflows.workflow.tasks]]
-name = "Backend"
-command = "run"
-path = "backend"
+task = "workflow.run"
+args = "FastAPI Server"
 
 [[workflows.workflow.tasks]]
-name = "Frontend"
-command = "run"
-path = "frontend"
+task = "workflow.run"
+args = "React Frontend"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "React Build"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "FastAPI Backend"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Kill Port"
 
 [[workflows.workflow]]
-name = "Backend"
+name = "FastAPI Server"
 author = "agent"
 
 [workflows.workflow.metadata]
@@ -33,11 +43,11 @@ task = "packager.installForAll"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "uvicorn app:app --host 0.0.0.0 --port 3000 --reload"
+args = "uvicorn app:app --host 0.0.0.0 --port 3000"
 waitForPort = 3000
 
 [[workflows.workflow]]
-name = "Frontend"
+name = "React Frontend"
 author = "agent"
 
 [workflows.workflow.metadata]
@@ -48,8 +58,51 @@ task = "packager.installForAll"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd frontend && npm install && npm run dev"
+args = "cd frontend && npm run dev"
 waitForPort = 5173
+
+[[workflows.workflow]]
+name = "React Build"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd frontend && npm run build"
+
+[[workflows.workflow]]
+name = "FastAPI Backend"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "uvicorn app:app --host 0.0.0.0 --port 3100 --reload"
+waitForPort = 3100
+
+[[workflows.workflow]]
+name = "Kill Port"
+author = "agent"
+
+[workflows.workflow.metadata]
+agentRequireRestartOnSave = false
+
+[[workflows.workflow.tasks]]
+task = "packager.installForAll"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f 'uvicorn.*:3000'"
 
 [deployment]
 run = ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 3000"]
@@ -57,6 +110,10 @@ run = ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port 3000"]
 [[ports]]
 localPort = 3000
 externalPort = 80
+
+[[ports]]
+localPort = 3100
+externalPort = 3000
 
 [[ports]]
 localPort = 5173
