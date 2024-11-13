@@ -43,7 +43,7 @@ task = "packager.installForAll"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "uvicorn app:app --host 0.0.0.0 --port 3000"
+args = "chmod +x build_and_run.sh && ./build_and_run.sh"
 waitForPort = 3000
 
 [[workflows.workflow]]
