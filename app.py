@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi.security import OAuth2AuthorizationCodeBearer
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -97,9 +98,10 @@ app.add_middleware(
     allowed_hosts=["*"]
 )
 
-# Mount static files
+# Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
+templates = Jinja2Templates(directory="templates")
 chatbot = Chatbot()
 
 async def get_current_user(request: Request, return_none=False):
@@ -252,6 +254,14 @@ async def auth_status(request: Request):
                 "session_status": "error"
             }
         )
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_react_app(request: Request):
+    return FileResponse("static/react/index.html")
+
+@app.get('/login', response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
 
 @app.get("/chat_history")
 async def get_chat_history_endpoint(request: Request):
@@ -416,10 +426,5 @@ async def send_message(
         logger.error(f"Error processing message: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Serve React App for all other routes
-@app.get("/{full_path:path}")
-async def serve_react_app(request: Request):
-    return FileResponse("static/react/index.html")
-
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=3100, reload=True)
