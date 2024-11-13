@@ -63,8 +63,7 @@ class Chatbot:
         self.chat_history = []
         self.video_contexts = []
         self.system_prompt = """You are an expert video and content analyzer. 
-        Maintain context of ALL interactions including user information, previous chats, and video analyses.
-        When referring to previous content, be specific about which video you're discussing.
+        Maintain context of ALL interactions including user information, previous chats, and video analyses. Always assume questions are about the most recently analyzed video unless another video is specifically referenced. Don't mention uploading any new videos. When referring to previous content, be specific about which video you're discussing.
         If you make a mistake, acknowledge it and correct yourself.
         Format your responses using clean markdown with single # for headers and proper indentation."""
         
