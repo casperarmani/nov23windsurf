@@ -47,6 +47,14 @@ export default defineConfig({
   build: {
     outDir: '../static/react',
     emptyOutDir: true,
-    manifest: true
+    manifest: true,
+    rollupOptions: {
+      output: {
+        manualChunks: undefined
+      }
+    }
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom']
   }
 })
