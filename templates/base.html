@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Video Analysis Chatbot{% endblock %}</title>
     
-    <!-- Compiled Tailwind CSS -->
+    <!-- Local CSS -->
     <link href="{{ url_for('static', path='css/dist/main.css') }}" rel="stylesheet">
     
     <!-- HTMX -->
@@ -15,7 +15,7 @@
     <script defer src="https://unpkg.com/alpinejs@3.13.3/dist/cdn.min.js"></script>
     
     <!-- Chart.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     {% block head %}{% endblock %}
 </head>
@@ -48,7 +48,7 @@
             </div>
             
             <!-- Page Content -->
-            <div class="container mx-auto p-4">
+            <div class="p-4">
                 {% block content %}{% endblock %}
             </div>
         </div>
@@ -78,9 +78,64 @@
         </div>
     </div>
     
+    <!-- Theme Management -->
     <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const themeManager = {
+                init() {
+                    this.setupThemeToggle('theme-toggle');
+                    this.setupThemeToggle('theme-toggle-sidebar');
+                    this.loadSavedTheme();
+                    this.setupLogoutButton();
+                },
+
+                setupThemeToggle(buttonId) {
+                    const button = document.getElementById(buttonId);
+                    if (button) {
+                        button.addEventListener('click', () => this.toggleTheme());
+                    }
+                },
+
+                toggleTheme() {
+                    const html = document.documentElement;
+                    const currentTheme = html.getAttribute('data-theme');
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    html.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                },
+
+                loadSavedTheme() {
+                    const savedTheme = localStorage.getItem('theme') || 'dark';
+                    document.documentElement.setAttribute('data-theme', savedTheme);
+                },
+
+                setupLogoutButton() {
+                    const logoutButton = document.getElementById('logout-button');
+                    if (logoutButton) {
+                        logoutButton.addEventListener('click', async () => {
+                            try {
+                                const response = await fetch('/logout', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    }
+                                });
+                                if (response.ok) {
+                                    window.location.href = '/login';
+                                }
+                            } catch (error) {
+                                console.error('Logout failed:', error);
+                            }
+                        });
+                    }
+                }
+            };
+
+            themeManager.init();
+        });
+
         // HTMX Error Handling
-        document.body.addEventListener('htmx:error', function(evt) {
+        document.body.addEventListener('htmx:error', (evt) => {
             console.error('HTMX Error:', evt.detail.error);
             const toast = document.createElement('div');
             toast.className = 'toast toast-end';
@@ -91,30 +146,6 @@
             `;
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
-        });
-
-        // Theme Toggle
-        function setupThemeToggle(buttonId) {
-            const button = document.getElementById(buttonId);
-            if (button) {
-                button.addEventListener('click', function() {
-                    const html = document.documentElement;
-                    const currentTheme = html.getAttribute('data-theme');
-                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                    html.setAttribute('data-theme', newTheme);
-                    localStorage.setItem('theme', newTheme);
-                });
-            }
-        }
-
-        // Initialize theme toggles
-        setupThemeToggle('theme-toggle');
-        setupThemeToggle('theme-toggle-sidebar');
-
-        // Set initial theme from localStorage
-        document.addEventListener('DOMContentLoaded', function() {
-            const savedTheme = localStorage.getItem('theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', savedTheme);
         });
     </script>
     

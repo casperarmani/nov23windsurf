@@ -2,10 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom component classes */
 @layer components {
+    /* Form Controls */
+    .form-control {
+        @apply w-full max-w-full;
+    }
+
+    .input-bordered {
+        @apply border-2 border-base-300;
+    }
+
+    /* Card Styles */
+    .card {
+        @apply rounded-xl shadow-lg;
+    }
+
+    .card-body {
+        @apply p-6 space-y-4;
+    }
+
+    /* Chat Styles */
+    .chat-container {
+        @apply h-[32rem] overflow-y-auto space-y-4 p-4 rounded-lg bg-base-200;
+    }
+
     .chat-message {
-        @apply mb-4 p-4 rounded-lg;
+        @apply p-4 rounded-lg;
     }
 
     .chat-message.user {
@@ -20,8 +42,40 @@
         @apply bg-error/10 text-error;
     }
 
+    /* Button Styles */
+    .btn {
+        @apply normal-case;
+    }
+
+    .btn-primary {
+        @apply bg-primary hover:bg-primary-focus text-primary-content;
+    }
+
+    .btn-secondary {
+        @apply bg-secondary hover:bg-secondary-focus text-secondary-content;
+    }
+
+    /* Navigation */
+    .menu {
+        @apply p-2 rounded-box;
+    }
+
+    .menu-item {
+        @apply rounded-lg transition-colors duration-200;
+    }
+
+    .menu-item.active {
+        @apply bg-primary text-primary-content;
+    }
+
+    /* Prose Styles */
     .prose {
         @apply max-w-none;
+        @apply prose-headings:text-base-content;
+        @apply prose-p:text-base-content;
+        @apply prose-strong:text-base-content;
+        @apply prose-ul:text-base-content;
+        @apply prose-ol:text-base-content;
     }
 
     .prose pre {
@@ -29,9 +83,12 @@
     }
 }
 
-/* Custom utilities */
 @layer utilities {
     .loading {
         @apply opacity-70 pointer-events-none;
+    }
+
+    .transition-fade {
+        @apply transition-opacity duration-300;
     }
 }
