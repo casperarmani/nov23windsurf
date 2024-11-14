@@ -13,6 +13,18 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     proxy: {
+      '/auth_status': {
+        target: 'http://0.0.0.0:3000',
+        changeOrigin: true
+      },
+      '/chat_history': {
+        target: 'http://0.0.0.0:3000',
+        changeOrigin: true
+      },
+      '/video_analysis_history': {
+        target: 'http://0.0.0.0:3000',
+        changeOrigin: true
+      },
       '/api': {
         target: 'http://0.0.0.0:3000',
         changeOrigin: true,
