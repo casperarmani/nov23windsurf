@@ -11,10 +11,12 @@ interface VideoUploadProps {
 function VideoUpload({ onUploadComplete }: VideoUploadProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
     setFiles(selectedFiles);
+    setError(null); // Clear any previous errors
   };
 
   const handleUpload = async (e: React.FormEvent) => {
@@ -22,13 +24,39 @@ function VideoUpload({ onUploadComplete }: VideoUploadProps) {
     if (files.length === 0) return;
 
     setUploading(true);
+    setError(null);
     
-    // Mock upload for UI development
-    setTimeout(() => {
+    try {
+      const formData = new FormData();
+      
+      // Add message field
+      formData.append('message', 'Video upload');
+      
+      // Append each video file
+      files.forEach((file) => {
+        formData.append('videos', file);
+      });
+
+      const response = await fetch('/send_message', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
       setFiles([]);
       if (onUploadComplete) onUploadComplete();
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload videos');
+      console.error('Upload error:', err);
+    } finally {
       setUploading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -46,15 +74,23 @@ function VideoUpload({ onUploadComplete }: VideoUploadProps) {
               multiple
               accept="video/*"
               onChange={handleFileChange}
+              disabled={uploading}
               className="block w-full text-sm text-slate-500
                 file:mr-4 file:py-2 file:px-4
                 file:rounded-md file:border-0
                 file:text-sm file:font-semibold
                 file:bg-slate-100 file:text-slate-700
                 hover:file:bg-slate-200
-                focus:outline-none focus:ring-2 focus:ring-slate-200"
+                focus:outline-none focus:ring-2 focus:ring-slate-200
+                disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
+
+          {error && (
+            <div className="rounded-md bg-red-50 p-4 text-sm text-red-600">
+              {error}
+            </div>
+          )}
 
           {files.length > 0 && (
             <div className="rounded-md bg-slate-50 p-4">
