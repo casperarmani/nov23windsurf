@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import ChatContainer from './components/ChatContainer';
 import VideoUpload from './components/VideoUpload';

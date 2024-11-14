@@ -1,4 +1,3 @@
-import React from 'react';
 import { ChatHistory, VideoHistory } from '../types';
 import { ScrollArea } from './ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
