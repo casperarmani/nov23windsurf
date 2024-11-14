@@ -8,7 +8,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, _password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
 }
 
@@ -28,33 +28,61 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkAuthStatus = async () => {
     try {
-      // Mock auth check for UI development
-      setUser({ email: 'test@example.com', id: '1' });
+      const response = await fetch('/auth_status', {
+        credentials: 'include'
+      });
+      const data = await response.json();
+      
+      if (data.authenticated && data.user) {
+        setUser(data.user);
+      } else {
+        setUser(null);
+      }
     } catch (error) {
       console.error('Auth status check failed:', error);
+      setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, _password: string) => {
     try {
-      // Mock login for UI development
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setUser({ email, id: '1' });
-      return { success: true };
+      const formData = new FormData();
+      formData.append('email', email);
+      formData.append('password', _password);
+
+      const response = await fetch('/login', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        await checkAuthStatus(); // Refresh user data after successful login
+        return { success: true };
+      }
+      
+      return { 
+        success: false, 
+        message: data.message || 'Login failed'
+      };
     } catch (error) {
       return { 
         success: false, 
-        message: 'Login failed'
+        message: 'Login failed. Please try again.'
       };
     }
   };
 
   const logout = async () => {
     try {
-      // Mock logout for UI development
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await fetch('/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
       setUser(null);
     } catch (error) {
       console.error('Logout failed:', error);
