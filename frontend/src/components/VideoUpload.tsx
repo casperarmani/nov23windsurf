@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Upload } from 'lucide-react';
-import { useToast } from './ui/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 
 interface VideoUploadProps {
   onUploadComplete?: () => void;
@@ -54,24 +54,38 @@ function VideoUpload({ onUploadComplete }: VideoUploadProps) {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (files.length === 0) return;
+    if (files.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "No files selected",
+        description: "Please select at least one video file to upload",
+      });
+      return;
+    }
 
     setUploading(true);
     const formData = new FormData();
-    formData.append('message', 'Video upload');
+    formData.append('message', 'Video upload for analysis');
     files.forEach(file => {
       formData.append('videos', file);
     });
 
     try {
-      const response = await fetch('/send_message', {
+      const response = await fetch('http://0.0.0.0:3000/send_message', {
         method: 'POST',
         credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+        },
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.detail || 
+          `Upload failed: ${response.status} ${response.statusText}`
+        );
       }
 
       const data = await response.json();
@@ -84,6 +98,7 @@ function VideoUpload({ onUploadComplete }: VideoUploadProps) {
       setFiles([]);
       if (onUploadComplete) onUploadComplete();
     } catch (error) {
+      console.error('Upload error:', error);
       toast({
         variant: "destructive",
         title: "Upload failed",
