@@ -1,3 +1,4 @@
+import React from 'react';
 import { ChatHistory, VideoHistory } from '../types';
 import { ScrollArea } from './ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -18,7 +19,7 @@ function History({ chatHistory, videoHistory }: HistoryProps) {
           <ScrollArea className="h-[400px] w-full rounded-md border p-4">
             {chatHistory.length > 0 ? (
               chatHistory.map((msg, index) => (
-                <div key={msg.id || index} className="mb-4">
+                <div key={index} className="mb-4">
                   <div className="text-xs text-muted-foreground">
                     {new Date(msg.TIMESTAMP).toLocaleString()}
                   </div>
@@ -45,7 +46,7 @@ function History({ chatHistory, videoHistory }: HistoryProps) {
           <ScrollArea className="h-[400px] w-full rounded-md border p-4">
             {videoHistory.length > 0 ? (
               videoHistory.map((analysis, index) => (
-                <div key={analysis.id || index} className="mb-4">
+                <div key={index} className="mb-4">
                   <div className="text-xs text-muted-foreground">
                     {new Date(analysis.TIMESTAMP).toLocaleString()}
                   </div>
