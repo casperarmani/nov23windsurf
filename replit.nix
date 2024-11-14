@@ -1,6 +1,5 @@
 {pkgs}: {
   deps = [
-    pkgs.gh
     pkgs.zlib
     pkgs.tk
     pkgs.tcl

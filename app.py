@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -76,16 +76,10 @@ async def startup_event():
     
     asyncio.create_task(cleanup_sessions())
 
-# Configure CORS with specific origin and allow WebSocket
+# Configure CORS with specific origin
 origins = [
     "http://localhost:5173",
     "http://0.0.0.0:5173",
-    "http://172.31.196.19:5173",
-    "https://172.31.196.19:5173",
-    "ws://localhost:5173",
-    "ws://0.0.0.0:5173",
-    "ws://172.31.196.19:5173",
-    "wss://172.31.196.19:5173",
 ]
 
 app.add_middleware(
@@ -107,58 +101,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
 templates = Jinja2Templates(directory="templates")
 chatbot = Chatbot()
-
-# WebSocket connection manager
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
-
-    async def connect(self, websocket: WebSocket, client_id: str):
-        await websocket.accept()
-        self.active_connections[client_id] = websocket
-
-    def disconnect(self, client_id: str):
-        if client_id in self.active_connections:
-            del self.active_connections[client_id]
-
-    async def send_message(self, message: Dict, client_id: str):
-        if client_id in self.active_connections:
-            await self.active_connections[client_id].send_json(message)
-
-manager = ConnectionManager()
-
-@app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
-    try:
-        await manager.connect(websocket, client_id)
-        
-        while True:
-            data = await websocket.receive_text()
-            # Process the received message
-            response = await chatbot.send_message(data)
-            
-            # Send response back to the client
-            await manager.send_message(
-                {
-                    "type": "message",
-                    "content": response,
-                    "client_id": client_id
-                },
-                client_id
-            )
-    except WebSocketDisconnect:
-        manager.disconnect(client_id)
-    except Exception as e:
-        logger.error(f"WebSocket error: {str(e)}")
-        if client_id in manager.active_connections:
-            await manager.send_message(
-                {
-                    "type": "error",
-                    "content": "An error occurred processing your message",
-                    "client_id": client_id
-                },
-                client_id
-            )
 
 async def get_current_user(request: Request, return_none=False):
     try:

@@ -5,19 +5,10 @@ import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 
-interface Message {
-  type: 'user' | 'bot' | 'error';
-  content: string;
-}
-
-interface ChatContainerProps {
-  onMessageSent?: () => void;
-}
-
-function ChatContainer({ onMessageSent }: ChatContainerProps) {
-  const [message, setMessage] = useState<string>('');
-  const [chatMessages, setChatMessages] = useState<Message[]>([]);
-  const chatContainerRef = useRef<HTMLDivElement>(null);
+function ChatContainer({ onMessageSent }) {
+  const [message, setMessage] = useState('');
+  const [chatMessages, setChatMessages] = useState([]);
+  const chatContainerRef = useRef(null);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -25,7 +16,7 @@ function ChatContainer({ onMessageSent }: ChatContainerProps) {
     }
   }, [chatMessages]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!message.trim()) return;
 
