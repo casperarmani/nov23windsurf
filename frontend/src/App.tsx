@@ -3,7 +3,7 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import ChatContainer from './components/ChatContainer';
 import VideoUpload from './components/VideoUpload';
 import History from './components/History';
-import { ChatHistory, VideoHistory } from './types';
+import { ChatHistory, VideoHistory, ApiResponse } from './types';
 
 function App() {
   const [chatHistory, setChatHistory] = React.useState<ChatHistory[]>([]);
@@ -17,21 +17,11 @@ function App() {
       ]);
 
       if (chatResponse.ok && videoResponse.ok) {
-        const chatData: ChatHistory[] = await chatResponse.json();
-        const videoData: VideoHistory[] = await videoResponse.json();
+        const chatData: ApiResponse<ChatHistory> = await chatResponse.json();
+        const videoData: ApiResponse<VideoHistory> = await videoResponse.json();
         
-        // Transform the data to match our type definitions if needed
-        setChatHistory(chatData.map(chat => ({
-          TIMESTAMP: chat.TIMESTAMP,
-          chat_type: chat.chat_type,
-          message: chat.message
-        })));
-        
-        setVideoHistory(videoData.map(video => ({
-          TIMESTAMP: video.TIMESTAMP,
-          upload_file_name: video.upload_file_name,
-          analysis: video.analysis
-        })));
+        setChatHistory(chatData.history);
+        setVideoHistory(videoData.history);
       }
     } catch (error) {
       console.error('Error fetching histories:', error);
