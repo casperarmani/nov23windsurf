@@ -5,6 +5,7 @@
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.1",
     "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-toast": "^1.2.2",
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -26,6 +27,7 @@
     "caniuse-lite": "^1.0.30001680",
     "chart.js": "^4.4.6",
     "chokidar": "^3.6.0",
+    "class-variance-authority": "^0.7.0",
     "color-convert": "^2.0.1",
     "color-name": "^1.1.4",
     "commander": "^4.1.1",
