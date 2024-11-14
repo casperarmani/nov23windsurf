@@ -1,14 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
-import { Textarea } from "./ui/textarea";
-import { Button } from "./ui/button";
-import { Card, CardContent } from "./ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
-
-interface Message {
-  type: 'user' | 'bot' | 'error';
-  content: string;
-}
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from './ui/card';
+import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
+import { ScrollArea } from './ui/scroll-area';
+import { Avatar, AvatarFallback } from './ui/avatar';
+import { Message } from '../types';
+import { Send } from 'lucide-react';
 
 interface ChatContainerProps {
   onMessageSent?: () => void;
@@ -29,75 +26,69 @@ function ChatContainer({ onMessageSent }: ChatContainerProps) {
     e.preventDefault();
     if (!message.trim()) return;
 
-    const formData = new FormData();
-    formData.append('message', message);
-
-    try {
-      const response = await axios.post('/send_message', formData);
-      
-      setChatMessages(prev => [
-        ...prev,
-        { type: 'user', content: message },
-        { type: 'bot', content: response.data.response }
-      ]);
-      
-      setMessage('');
-      if (onMessageSent) onMessageSent();
-    } catch (error) {
-      console.error('Error sending message:', error);
-      setChatMessages(prev => [
-        ...prev,
-        { type: 'error', content: 'Failed to send message. Please try again.' }
-      ]);
-    }
+    setChatMessages(prev => [
+      ...prev,
+      { type: 'user', content: message },
+      { type: 'bot', content: 'This is a mock response for UI development.' }
+    ]);
+    
+    setMessage('');
+    if (onMessageSent) onMessageSent();
   };
 
   return (
-    <div className="mb-6">
-      <div
-        ref={chatContainerRef}
-        className="rounded-lg p-4 mb-4 h-96 overflow-y-auto bg-background"
-      >
-        {chatMessages.map((msg, index) => (
-          <div
-            key={index}
-            className={`mb-4 ${
-              msg.type === 'user' ? 'flex justify-end' : 'flex justify-start'
-            }`}
-          >
-            <Card className={`max-w-[80%] ${
-              msg.type === 'error' ? 'bg-destructive text-destructive-foreground' : ''
-            }`}>
-              <CardContent className="p-4 flex items-start gap-3">
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle>Chat</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ScrollArea className="h-[400px] w-full rounded-md border p-4">
+          {chatMessages.map((msg, index) => (
+            <div
+              key={index}
+              className={`mb-4 flex ${
+                msg.type === 'user' ? 'justify-end' : 'justify-start'
+              }`}
+            >
+              <div className={`flex items-start gap-3 max-w-[80%] ${
+                msg.type === 'error' ? 'bg-destructive text-destructive-foreground' : ''
+              }`}>
                 {msg.type !== 'user' && (
                   <Avatar>
                     <AvatarFallback>AI</AvatarFallback>
                   </Avatar>
                 )}
-                <div className="flex-1">{msg.content}</div>
+                <div className={`rounded-lg p-3 ${
+                  msg.type === 'user' 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'bg-muted'
+                }`}>
+                  {msg.content}
+                </div>
                 {msg.type === 'user' && (
                   <Avatar>
                     <AvatarFallback>ME</AvatarFallback>
                   </Avatar>
                 )}
-              </CardContent>
-            </Card>
-          </div>
-        ))}
-      </div>
-
-      <form onSubmit={handleSubmit} className="flex gap-4">
-        <Textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Type your message..."
-          className="flex-1"
-        />
-        <Button type="submit" className="self-end">
-          Send
-        </Button>
-      </form>
-    </div>
+              </div>
+            </div>
+          ))}
+        </ScrollArea>
+      </CardContent>
+      <CardFooter>
+        <form onSubmit={handleSubmit} className="flex w-full gap-4">
+          <Textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Type your message..."
+            className="flex-1"
+          />
+          <Button type="submit" size="icon">
+            <Send className="h-4 w-4" />
+          </Button>
+        </form>
+      </CardFooter>
+    </Card>
   );
 }
 
