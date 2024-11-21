@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import App from './App.tsx'
 import Home from './pages/Home.tsx'
+import LoginForm from './components/LoginForm.tsx'
+import { AuthProvider } from './context/AuthContext'
+import ProtectedRoute from './components/ProtectedRoute'
 import './index.css'
 
 const router = createBrowserRouter([
@@ -11,18 +14,25 @@ const router = createBrowserRouter([
     element: <Home />,
   },
   {
+    path: '/login',
+    element: <LoginForm />,
+  },
+  {
     path: '/app',
-    element: <App />,
+    element: (
+      <ProtectedRoute>
+        <App />
+      </ProtectedRoute>
+    ),
   }
 ], {
   basename: '/',
-  future: {
-    v7_relativeSplatPath: true
-  }
 });
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   </React.StrictMode>,
 )
