@@ -31,6 +31,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await fetch('/auth_status', {
         credentials: 'include'
       });
+      
+      if (!response.ok) {
+        throw new Error('Auth status check failed');
+      }
+      
       const data = await response.json();
       
       if (data.authenticated && data.user) {
@@ -41,6 +46,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Auth status check failed:', error);
       setUser(null);
+      // Optionally trigger a retry with exponential backoff
+      // if the error was due to network issues
+      if (error instanceof TypeError) {
+        setTimeout(checkAuthStatus, 5000);
+      }
     } finally {
       setLoading(false);
     }
