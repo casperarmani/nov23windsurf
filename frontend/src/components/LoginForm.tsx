@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -25,13 +25,6 @@ const LoginForm: React.FC = () => {
     return true;
   };
 
-  const location = useLocation();
-  
-  interface LocationState {
-    from?: string;
-    message?: string;
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -44,8 +37,9 @@ const LoginForm: React.FC = () => {
     try {
       const result = await login(email, password);
       if (result.success) {
-        const state = location.state as LocationState;
-        const from = state?.from || '/';
+        // Get the redirect path from location state, default to '/app'
+        const { state } = location;
+        const from = state?.from || '/app';
         navigate(from, { replace: true });
       } else {
         setError(result.message || 'Invalid email or password');
