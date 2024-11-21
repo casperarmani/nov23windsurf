@@ -1,10 +1,13 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ChatContainer from './components/ChatContainer';
-import History from './components/History';
+import LoginForm from './components/LoginForm';
+import ProtectedRoute from './components/ProtectedRoute';
 import { Sidebar } from './components/Sidebar';
+import { AuthProvider } from './context/AuthContext';
 import { ChatHistory, VideoHistory, ApiResponse, Chat, Message } from './types';
 
-function App() {
+function MainApp() {
   const [chatHistory, setChatHistory] = React.useState<ChatHistory[]>([]);
   const [videoHistory, setVideoHistory] = React.useState<VideoHistory[]>([]);
   const [error, setError] = React.useState<string | null>(null);
@@ -105,6 +108,27 @@ function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginForm />} />
+          <Route
+            path="/app/*"
+            element={
+              <ProtectedRoute>
+                <MainApp />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/" element={<Navigate to="/app" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
