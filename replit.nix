@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.redis
     pkgs.gh
     pkgs.zlib
     pkgs.tk
