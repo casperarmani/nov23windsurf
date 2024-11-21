@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -45,6 +47,17 @@ export function Sidebar({
   onSelectChat 
 }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const { logout, user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   return (
     <div 
@@ -210,9 +223,9 @@ export function Sidebar({
                 isCollapsed ? "w-0 opacity-0" : "w-auto opacity-100"
               )}>
                 <div className="flex flex-col flex-1 space-y-1">
-                  <p className="text-sm font-medium leading-none">shadcn</p>
+                  <p className="text-sm font-medium leading-none">{user?.email || 'User'}</p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    m@example.com
+                    {user?.email}
                   </p>
                 </div>
                 <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
@@ -235,7 +248,7 @@ export function Sidebar({
               <span>Settings</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               <span>Log out</span>
             </DropdownMenuItem>
