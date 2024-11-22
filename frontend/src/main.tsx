@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import App from './App.tsx'
 import Home from './pages/Home.tsx'
 import LoginForm from './components/LoginForm.tsx'
@@ -9,6 +9,10 @@ import ProtectedRoute from './components/ProtectedRoute'
 import './index.css'
 
 const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <Home />,
+  },
   {
     path: '/login',
     element: <LoginForm />,
@@ -20,18 +24,6 @@ const router = createBrowserRouter([
         <App />
       </ProtectedRoute>
     ),
-  },
-  {
-    path: '/',
-    element: (
-      <ProtectedRoute>
-        <Home />
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: '*',
-    element: <Navigate to="/" replace />
   }
 ], {
   basename: '/',
