@@ -100,6 +100,13 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
 
+# Serve static files from the React build
+@app.get("/{full_path:path}")
+async def serve_react_app(full_path: str):
+    if full_path.startswith(("api/", "static/", "assets/")):
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse("static/react/index.html")
+
 chatbot = Chatbot()
 
 async def get_current_user(request: Request, return_none=False):
