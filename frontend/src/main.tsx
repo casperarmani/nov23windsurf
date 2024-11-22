@@ -14,26 +14,24 @@ const router = createBrowserRouter([
     element: <LoginForm />,
   },
   {
+    path: '/app',
+    element: (
+      <ProtectedRoute>
+        <App />
+      </ProtectedRoute>
+    ),
+  },
+  {
     path: '/',
-    element: <ProtectedRoute><App /></ProtectedRoute>,
-    children: [
-      {
-        path: '',
-        element: <Navigate to="/home" replace />
-      },
-      {
-        path: 'home',
-        element: <Home />
-      },
-      {
-        path: 'app',
-        element: <App />
-      }
-    ]
+    element: (
+      <ProtectedRoute>
+        <Home />
+      </ProtectedRoute>
+    ),
   },
   {
     path: '*',
-    element: <Navigate to="/home" replace />
+    element: <Navigate to="/" replace />
   }
 ], {
   basename: '/',
