@@ -1,4 +1,5 @@
-import { Play } from 'lucide-react';
+import React from 'react';
+import { Play, PauseCircle } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 
 export function VideoDemo() {
