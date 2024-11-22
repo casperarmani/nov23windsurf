@@ -1,15 +1,15 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 import ChatContainer from './components/ChatContainer';
 import History from './components/History';
 import { Sidebar } from './components/Sidebar';
 import { ChatHistory, VideoHistory, ApiResponse, Chat, Message } from './types';
 
 function App() {
-  const [chatHistory, setChatHistory] = React.useState<ChatHistory[]>([]);
-  const [videoHistory, setVideoHistory] = React.useState<VideoHistory[]>([]);
-  const [error, setError] = React.useState<string | null>(null);
-  const [chats, setChats] = React.useState<Chat[]>([]);
-  const [currentChatId, setCurrentChatId] = React.useState<string | null>(null);
+  const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
+  const [videoHistory, setVideoHistory] = useState<VideoHistory[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
 
   const fetchHistories = async () => {
     try {
@@ -70,7 +70,7 @@ function App() {
 
   const currentChat = chats.find(chat => chat.id === currentChatId) || null;
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchHistories();
   }, []);
 

@@ -1,6 +1,5 @@
-import React from 'react';
 import { Link } from 'react-router-dom';
-import { Brain, Zap, BarChart3, Video, ArrowRight, Play } from 'lucide-react';
+import { Brain, Zap, BarChart3, ArrowRight, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/home/Navbar';
 import { FeatureCard } from '@/components/home/FeatureCard';
