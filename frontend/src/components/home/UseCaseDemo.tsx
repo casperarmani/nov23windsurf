@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { GlassCard } from './GlassCard';
 import { UseCase } from './MetricsBanner';
 import { Play } from 'lucide-react';
