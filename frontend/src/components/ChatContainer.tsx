@@ -62,7 +62,7 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
       formData.append('message', newMessage.content);
       formData.append('session_id', chatId);
 
-      const response = await fetch('/api/send_message', {
+      const response = await fetch('/send_message', {
         method: 'POST',
         body: formData,
         credentials: 'include'
