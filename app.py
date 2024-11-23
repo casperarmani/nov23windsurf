@@ -21,7 +21,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
 
 from chatbot import Chatbot
-from database import Database, create_user, get_user_by_email
+from database import Database, create_user, get_user_by_email, get_video_analysis_history
 from redis_storage import RedisFileStorage
 from redis_manager import RedisManager, TaskType, TaskPriority
 from session_config import (
@@ -243,38 +243,6 @@ app.add_middleware(
 # API routes will be defined here first
 
 chatbot = Chatbot()
-
-async def get_current_user(request: Request, return_none=False):
-    try:
-        session_id = request.cookies.get('session_id')
-        if not session_id:
-            if return_none:
-                return None
-            raise HTTPException(status_code=401, detail="Not authenticated")
-        
-        is_valid, session_data = redis_manager.validate_session(session_id)
-        if not is_valid or not session_data:
-            if return_none:
-                return None
-            raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-        if not isinstance(session_data, dict) or 'id' not in session_data:
-            if return_none:
-                return None
-            raise HTTPException(status_code=401, detail="Invalid session data")
-
-        # Check if session needs refresh
-        current_time = time.time()
-        last_refresh = session_data.get('last_refresh', 0)
-        if current_time - last_refresh > SESSION_REFRESH_THRESHOLD:
-            await redis_manager.refresh_session(session_id)
-
-        return session_data
-    except Exception as e:
-        logger.error(f"Error in get_current_user: {str(e)}")
-        if return_none:
-            return None
-        raise HTTPException(status_code=401, detail="Authentication error")
 
 @app.post('/login')
 async def login_post(
