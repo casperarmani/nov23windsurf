@@ -196,23 +196,23 @@ app.add_middleware(
 )
 
 # Chat Session endpoints
-@app.post("/create_chat_session")
+@app.post("/api/create_chat_session")
 async def create_chat_session(
     request: Request,
-    data: dict = Form(...),
+    title: str = Form(None)  # Make title optional
 ):
     user = await get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     try:
-        session = await db.create_chat_session(user['id'], data.get('title', 'New Chat'))
+        session = await db.create_chat_session(user['id'], title or 'New Chat')
         return JSONResponse(content=session)
     except Exception as e:
         logger.error(f"Error creating chat session: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/chat_sessions")
+@app.get("/api/chat_sessions")
 async def get_chat_sessions(request: Request):
     user = await get_current_user(request)
     if not user:
@@ -225,7 +225,7 @@ async def get_chat_sessions(request: Request):
         logger.error(f"Error fetching chat sessions: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/send_message")
+@app.post("/api/send_message")
 async def send_message(
     request: Request,
     message: str = Form(...),
@@ -306,7 +306,7 @@ async def send_message(
         logger.error(f"Error processing message: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/chat_history")
+@app.get("/api/chat_history")
 async def get_chat_history(
     request: Request,
     session_id: Optional[str] = None
@@ -400,7 +400,7 @@ async def get_current_user(request: Request, return_none=False):
             return None
         raise HTTPException(status_code=401, detail="Authentication error")
 
-@app.post('/login')
+@app.post('/api/login')
 async def login_post(
     request: Request,
     email: str = Form(...),
@@ -461,7 +461,7 @@ async def login_post(
             content={"success": False, "message": str(e)}
         )
 
-@app.post('/logout')
+@app.post('/api/logout')
 async def logout(request: Request):
     session_id = request.cookies.get('session_id')
     if session_id:
@@ -476,7 +476,7 @@ async def logout(request: Request):
     )
     return response
 
-@app.get("/auth_status")
+@app.get("/api/auth_status")
 async def auth_status(request: Request):
     try:
         session_id = request.cookies.get('session_id')
@@ -561,7 +561,7 @@ async def serve_react_app(request: Request):
 
 
 
-@app.get("/video_analysis_history")
+@app.get("/api/video_analysis_history")
 async def get_video_analysis_history_endpoint(request: Request):
     user = await get_current_user(request)
     if not user:
@@ -578,7 +578,7 @@ async def get_video_analysis_history_endpoint(request: Request):
     redis_manager.set_cache(cache_key, history)
     return JSONResponse(content={"history": history})
 
-@app.get("/health")
+@app.get("/api/health")
 async def health_check():
     health_status = {
         "status": "healthy",
@@ -620,7 +620,7 @@ async def health_check():
     
     return health_status
 
-@app.get("/metrics")
+@app.get("/api/metrics")
 async def metrics():
     try:
         redis_metrics = await redis_manager.get_metrics()

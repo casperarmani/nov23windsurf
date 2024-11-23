@@ -103,14 +103,12 @@ function App() {
 
   const handleNewChat = async () => {
     try {
+      const formData = new FormData();
+      formData.append('title', `New Chat ${chats.length + 1}`);
+
       const response = await fetch('/api/create_chat_session', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          title: `New Chat ${chats.length + 1}`
-        })
+        body: formData
       });
 
       if (!response.ok) {
@@ -137,20 +135,7 @@ function App() {
 
   const handleMessageSent = async (messages: Message[], chatId: string) => {
     try {
-      const formData = new FormData();
-      formData.append('message', messages[messages.length - 1].content);
-      formData.append('session_id', chatId);
-
-      const response = await fetch('/api/send_message', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
-
-      // Update local state
+      // Update local state immediately for better UX
       setChats(prevChats => 
         prevChats.map(chat => 
           chat.id === chatId 
@@ -159,27 +144,27 @@ function App() {
         )
       );
 
-      // Fetch updated history after message is sent
-      fetchHistories();
+      // No need to fetch histories here since the ChatContainer component 
+      // already handles the API call and response
     } catch (error) {
-      console.error('Error sending message:', error);
-      setError('Failed to send message');
+      console.error('Error updating chat:', error);
+      setError('Failed to update chat');
     }
   };
 
-  const currentChat = chats.find(chat => chat.id === currentChatId) || null;
-
-  // Load chat sessions and histories on mount
+  // Load chat sessions on mount
   React.useEffect(() => {
     fetchChatSessions();
   }, []);
 
-  // Fetch chat history when current chat changes
+  // Fetch histories when current chat changes
   React.useEffect(() => {
     if (currentChatId) {
       fetchHistories();
     }
   }, [currentChatId]);
+
+  const currentChat = chats.find(chat => chat.id === currentChatId) || null;
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-300">

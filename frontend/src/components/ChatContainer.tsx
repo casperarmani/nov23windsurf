@@ -24,12 +24,6 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    console.log('Initial Messages:', initialMessages);
-    console.log('Chat Messages State:', chatMessages);
-    setChatMessages(initialMessages);
-  }, [initialMessages]);
-
-  useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
@@ -40,26 +34,27 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
   }, [chatMessages]);
 
   useEffect(() => {
-    console.log('Initial Messages:', chatId);
-    if (chatId) {
-      setChatMessages([]);
-    } else {
+    if (initialMessages) {
       setChatMessages(initialMessages);
+    } else {
+      setChatMessages([]);
     }
-  }, [chatId]);
+  }, [initialMessages, chatId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim() || !chatId) return;
+    if (!message.trim() || !chatId || isLoading) return;
+
+    setIsLoading(true);
+    setError(null);
 
     const newMessage = {
-      type: 'user',
+      type: 'user' as const,
       content: message.trim()
     };
 
     // Update local state immediately for better UX
-    const updatedMessages = [...chatMessages, newMessage];
-    setChatMessages(updatedMessages);
+    setChatMessages(prev => [...prev, newMessage]);
     setMessage('');
 
     try {
@@ -67,7 +62,7 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
       formData.append('message', newMessage.content);
       formData.append('session_id', chatId);
 
-      const response = await fetch('/send_message', {
+      const response = await fetch('/api/send_message', {
         method: 'POST',
         body: formData,
         credentials: 'include'
@@ -81,20 +76,22 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
       
       // Update messages with bot response
       const botMessage = {
-        type: 'bot',
+        type: 'bot' as const,
         content: result.response
       };
       
-      const finalMessages = [...updatedMessages, botMessage];
-      setChatMessages(finalMessages);
+      setChatMessages(prev => [...prev, botMessage]);
+      
       if (onMessageSent) {
-        onMessageSent(finalMessages, chatId);
+        onMessageSent([...chatMessages, newMessage, botMessage], chatId);
       }
     } catch (error) {
       console.error('Error:', error);
-      // Revert the message on error
-      setChatMessages(chatMessages);
       setError('Failed to send message. Please try again.');
+      // Remove the user message on error
+      setChatMessages(prev => prev.slice(0, -1));
+    } finally {
+      setIsLoading(false);
     }
   };
 
