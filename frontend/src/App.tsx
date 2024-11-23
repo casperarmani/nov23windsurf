@@ -11,11 +11,40 @@ function App() {
   const [chats, setChats] = React.useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = React.useState<string | null>(null);
 
+  const fetchChatSessions = async () => {
+    try {
+      const response = await fetch('/chat_sessions');
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error('Failed to fetch chat sessions:', data.error);
+        return;
+      }
+
+      if (data.sessions && Array.isArray(data.sessions)) {
+        const formattedChats = data.sessions.map((session: any) => ({
+          id: session.id,
+          title: session.title || 'New Chat',
+          messages: [],
+          timestamp: session.created_at
+        }));
+        setChats(formattedChats);
+        
+        // Set current chat if none selected
+        if (!currentChatId && formattedChats.length > 0) {
+          setCurrentChatId(formattedChats[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching chat sessions:', error);
+    }
+  };
+
   const fetchHistories = async () => {
     try {
       setError(null);
       const [chatResponse, videoResponse] = await Promise.all([
-        fetch('/chat_history'),
+        fetch('/chat_history' + (currentChatId ? `?session_id=${currentChatId}` : '')),
         fetch('/video_analysis_history')
       ]);
 
@@ -35,6 +64,23 @@ function App() {
           throw new Error('Invalid chat history data format');
         }
         setChatHistory(chatData.history);
+        
+        // Update current chat messages if we have a selected chat
+        if (currentChatId) {
+          setChats(prevChats => 
+            prevChats.map(chat => 
+              chat.id === currentChatId
+                ? { 
+                    ...chat, 
+                    messages: chatData.history.map((msg: any) => ({
+                      type: msg.chat_type,
+                      content: msg.message
+                    }))
+                  }
+                : chat
+            )
+          );
+        }
       }
 
       // Check for error in video history response
@@ -83,9 +129,17 @@ function App() {
 
   const currentChat = chats.find(chat => chat.id === currentChatId) || null;
 
+  // Load chat sessions and histories on mount
   React.useEffect(() => {
-    fetchHistories();
+    fetchChatSessions();
   }, []);
+
+  // Fetch chat history when current chat changes
+  React.useEffect(() => {
+    if (currentChatId) {
+      fetchHistories();
+    }
+  }, [currentChatId]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-300">

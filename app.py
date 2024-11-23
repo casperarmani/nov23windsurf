@@ -303,6 +303,7 @@ async def get_chat_history(
         cache_key = f"chat_history:{user['id']}"
         if session_id:
             cache_key += f":{session_id}"
+            logger.info(f"Fetching chat history for session {session_id}")
         
         cached_history = redis_manager.get_cache(cache_key)
         if cached_history:
@@ -313,6 +314,7 @@ async def get_chat_history(
             history = await db.get_chat_history(user['id'], session_id)
             if history:
                 redis_manager.set_cache(cache_key, history)
+                logger.info(f"Fetched and cached {len(history)} messages")
             return JSONResponse(content={"history": history or []})
         except HTTPException as e:
             logger.error(f"Database error in chat history: {str(e)}")
