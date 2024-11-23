@@ -120,8 +120,12 @@ function App() {
               <div className="grid grid-cols-1 gap-8">
                 <ChatContainer 
                   key={currentChatId || 'new'} 
-                  initialMessages={chatHistory}
+                  initialMessages={chatHistory.map(ch => ({
+                    type: ch.chat_type as 'user' | 'bot' | 'error',
+                    content: ch.message
+                  }))}
                   onCreateSession={handleNewChat}
+                  onMessageSent={handleMessageSent}
                 />
               </div>
             </div>

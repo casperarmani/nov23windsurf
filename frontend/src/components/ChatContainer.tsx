@@ -11,6 +11,7 @@ import { useChat } from '../context/ChatContext';
 interface ChatContainerProps {
   initialMessages?: Message[];
   onCreateSession?: () => void;
+  onMessageSent?: (messages: Message[], sessionId: string) => void;
 }
 
 function ChatContainer({ initialMessages = [], onCreateSession }: ChatContainerProps) {

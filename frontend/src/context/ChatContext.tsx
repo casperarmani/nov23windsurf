@@ -57,10 +57,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
+      // Add session_id to FormData
+      formData.append('session_id', currentSession.id);
+
       // Add current message to UI immediately for better UX
       const userMessage = formData.get('message') as string;
       if (userMessage?.trim()) {
-        setMessages(prev => [...prev, { type: 'user', content: userMessage }]);
+        const newMessage = { type: 'user' as const, content: userMessage };
+        setMessages(prev => [...prev, newMessage]);
       }
 
       const response = await fetch('/send_message', {
