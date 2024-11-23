@@ -47,13 +47,21 @@ function App() {
       const chatData = await chatResponse.json();
       const chatHistory = Array.isArray(chatData) ? chatData : [];
       
-      // Group messages by session_id
+      // Group messages by session_id with chronological ordering
       const groupedBySession = chatHistory.reduce((acc: { [key: string]: ChatHistory[] }, msg) => {
         const sessionId = msg.session_id || 'default';
         if (!acc[sessionId]) {
           acc[sessionId] = [];
         }
-        acc[sessionId].push(msg);
+        // Insert while maintaining chronological order
+        const index = acc[sessionId].findIndex(m => 
+          new Date(m.TIMESTAMP) > new Date(msg.TIMESTAMP)
+        );
+        if (index === -1) {
+          acc[sessionId].push(msg);
+        } else {
+          acc[sessionId].splice(index, 0, msg);
+        }
         return acc;
       }, {});
 

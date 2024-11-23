@@ -54,7 +54,7 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
           type: msg.chat_type === 'user' ? 'user' : 'bot',
           content: msg.message || '',
           timestamp: msg.TIMESTAMP,
-          sessionId: msg.session_id
+          sessionId: msg.session_id || 'default'
         }));
         
         setChatMessages(transformedMessages);
