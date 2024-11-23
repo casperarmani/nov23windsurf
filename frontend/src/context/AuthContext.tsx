@@ -28,7 +28,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const checkAuthStatus = async () => {
     try {
-      const response = await fetch('/auth_status', {
+      const response = await fetch('/api/auth_status', {
         credentials: 'include'
       });
       
@@ -62,7 +62,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       formData.append('email', email);
       formData.append('password', _password);
 
-      const response = await fetch('/login', {
+      const response = await fetch('/api/login', {
         method: 'POST',
         credentials: 'include',
         body: formData
@@ -89,7 +89,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await fetch('/logout', {
+      await fetch('/api/logout', {
         method: 'POST',
         credentials: 'include'
       });
