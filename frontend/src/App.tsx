@@ -35,33 +35,22 @@ function App() {
         ? videoData.history 
         : (videoData.history || []);
 
+      console.log('Raw Chat History:', chatHistory);
+
       // More robust chat history conversion
-      const convertedChats: Chat[] = chatHistory.reduce((acc: Chat[], chatItem) => {
-        const existingChat = acc.find(chat => 
-          chat.messages[0]?.content === chatItem.message
-        );
+      const convertedChats: Chat[] = chatHistory.map(chatItem => ({
+        id: chatItem.id || crypto.randomUUID(),
+        title: chatItem.message.length > 30 
+          ? chatItem.message.slice(0, 30) + '...' 
+          : (chatItem.message || 'Untitled Chat'),
+        messages: [{
+          type: chatItem.chat_type || 'user',
+          content: chatItem.message || ''
+        }],
+        timestamp: chatItem.TIMESTAMP || new Date().toISOString()
+      }));
 
-        if (existingChat) {
-          existingChat.messages.push({
-            type: chatItem.chat_type || 'user',
-            content: chatItem.message || ''
-          });
-        } else {
-          acc.push({
-            id: chatItem.id || crypto.randomUUID(),
-            title: chatItem.message.length > 30 
-              ? chatItem.message.slice(0, 30) + '...' 
-              : (chatItem.message || 'Untitled Chat'),
-            messages: [{
-              type: chatItem.chat_type || 'user',
-              content: chatItem.message || ''
-            }],
-            timestamp: chatItem.TIMESTAMP || new Date().toISOString()
-          });
-        }
-
-        return acc;
-      }, []);
+      console.log('Converted Chats:', convertedChats);
 
       // Sanitize histories with comprehensive fallback values
       const sanitizedChatHistory = chatHistory.map(chat => ({
@@ -70,6 +59,8 @@ function App() {
         message: chat.message || '',
         id: chat.id || crypto.randomUUID()
       }));
+
+      console.log('Sanitized Chat History:', sanitizedChatHistory);
 
       const sanitizedVideoHistory = videoHistory.map(video => ({
         TIMESTAMP: video.TIMESTAMP || video.timestamp || new Date().toISOString(),

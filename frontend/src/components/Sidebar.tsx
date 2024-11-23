@@ -121,22 +121,28 @@ export function Sidebar({
             Recent Chats
           </h2>
           <div className="space-y-1">
-            {chats.map((chat) => (
-              <Button
-                key={chat.id}
-                variant={currentChatId === chat.id ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start transition-all duration-300 ease-in-out",
-                  isCollapsed ? "px-2" : "px-4"
-                )}
-                onClick={() => onSelectChat(chat.id)}
-              >
-                <MessageSquare className="h-4 w-4 shrink-0" />
-                {!isCollapsed && (
-                  <span className="ml-2 truncate">{chat.title}</span>
-                )}
-              </Button>
-            ))}
+            {chats.length > 0 ? (
+              chats.map((chat) => (
+                <Button
+                  key={chat.id}
+                  variant={currentChatId === chat.id ? "secondary" : "ghost"}
+                  className={cn(
+                    "w-full justify-start transition-all duration-300 ease-in-out",
+                    isCollapsed ? "px-2" : "px-4"
+                  )}
+                  onClick={() => onSelectChat(chat.id)}
+                >
+                  <MessageSquare className="h-4 w-4 shrink-0" />
+                  {!isCollapsed && (
+                    <span className="ml-2 truncate">{chat.title}</span>
+                  )}
+                </Button>
+              ))
+            ) : (
+              <div className="text-sm text-muted-foreground px-4 py-2">
+                No chats available
+              </div>
+            )}
           </div>
         </div>
         <Separator className="my-2" />
