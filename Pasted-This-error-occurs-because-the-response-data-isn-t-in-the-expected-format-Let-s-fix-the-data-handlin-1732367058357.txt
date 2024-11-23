@@ -1,0 +1,94 @@
+This error occurs because the response data isn't in the expected format. Let's fix the data handling in your fetch logic:
+
+First, let's modify the fetchHistories function in App.tsx:
+const fetchHistories = async (sessionId?: string) => {
+  try {
+    setError(null);
+    
+    const url = sessionId ? `/chat_history?session_id=${sessionId}` : '/chat_history';
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    // Check if data exists and is an array
+    const chatData = Array.isArray(data) ? data : [];
+    
+    if (chatData.length === 0) {
+      setChatHistory([]);
+      setChats([]);
+      return;
+    }
+    // Sort messages by timestamp
+    const sortedData = [...chatData].sort((a, b) => 
+      new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
+    );
+    // Group by session
+    const groupedBySession = sortedData.reduce((acc: { [key: string]: ChatHistory[] }, msg) => {
+      const sessionId = msg.session_id;
+      if (!sessionId) return acc;
+      
+      if (!acc[sessionId]) {
+        acc[sessionId] = [];
+      }
+      acc[sessionId].push(msg);
+      return acc;
+    }, {});
+    // Update session cache
+    setSessionCache(groupedBySession);
+    // Convert to Chat objects
+    const convertedChats = Object.entries(groupedBySession).map(([sessionId, messages]) => ({
+      id: sessionId,
+      title: messages[0]?.message?.slice(0, 30) || 'Untitled Chat',
+      messages: messages.map(msg => ({
+        type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'user' | 'bot' | 'error',
+        content: msg.message,
+        timestamp: msg.TIMESTAMP,
+        sessionId: sessionId
+      })),
+      timestamp: messages[0]?.TIMESTAMP,
+      session_id: sessionId
+    }));
+    setChats(convertedChats);
+    
+    // Update chat history for current session
+    if (sessionId) {
+      setChatHistory(groupedBySession[sessionId] || []);
+    } else {
+      setChatHistory(sortedData);
+    }
+    
+  } catch (error) {
+    console.error('Error fetching chat history:', error);
+    setError('Failed to fetch chat history');
+  }
+};
+Also, make sure your backend is returning data in the correct format. Check your database query in database.py:
+async def get_chat_history(self, user_id: str, session_id: Optional[str] = None, limit: int = 50) -> List[dict]:
+    try:
+        # Validate user_id
+        if not user_id:
+            logger.warning("Attempted to retrieve chat history with empty user_id")
+            return []
+        # Build query
+        query = self.supabase.table('user_chat_history')\
+            .select('*')\
+            .eq('user_id', user_id)\
+            .is_('deleted_at', 'null')
+        
+        if session_id:
+            query = query.eq('session_id', session_id)
+            
+        response = query.order('TIMESTAMP', desc=True).limit(limit).execute()
+        
+        # Ensure we return an empty list if no data
+        return response.data if response.data else []
+        
+    except Exception as e:
+        logger.error(f"Error fetching chat history: {str(e)}")
+        return []
+These changes will:
+
+Handle cases where the response data is undefined or not an array
+Provide proper error handling
+Ensure empty states are handled correctly
+Maintain proper typing according to your ChatHistory interface
+The error you're seeing suggests the response isn't being properly formatted as an array, so these changes should help handle that case and prevent the error.

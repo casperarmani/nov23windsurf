@@ -58,7 +58,8 @@ class Database:
             if session_id:
                 query = query.eq('session_id', session_id)
                 
-            query = query.order('TIMESTAMP', asc=True)  # Ensure chronological order
+            # Fix order syntax - remove asc/desc parameter
+            query = query.order('TIMESTAMP')  # Ensure chronological order
             
             # Optional session_id filtering
             if session_id:

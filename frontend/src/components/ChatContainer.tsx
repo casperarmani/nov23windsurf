@@ -88,20 +88,17 @@ function ChatContainer({
   // Combined useEffect for chat history management
   useEffect(() => {
     if (user && chatId) {
-      const messages = sessionCache[chatId];
-      if (messages?.length > 0) {
-        const transformedMessages = messages.map(msg => ({
-          type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'user' | 'bot' | 'error',
-          content: msg.message,
-          timestamp: msg.TIMESTAMP,
-          sessionId: msg.session_id || chatId
-        }));
-        setChatMessages(transformedMessages);
+      if (initialMessages?.length > 0) {
+        // Sort messages by timestamp
+        const sortedMessages = [...initialMessages].sort((a, b) => 
+          new Date(a.timestamp || '').getTime() - new Date(b.timestamp || '').getTime()
+        );
+        setChatMessages(sortedMessages);
       } else {
         fetchChatHistory();
       }
     }
-  }, [user, chatId, sessionCache]);
+  }, [user, chatId, initialMessages]);
 
   // Auto-scroll when messages change
   useEffect(() => {
