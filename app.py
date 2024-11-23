@@ -295,26 +295,31 @@ async def get_chat_history(
     request: Request,
     session_id: Optional[str] = None
 ):
-    user = await get_current_user(request)
-    if not user:
-        return JSONResponse(content={"history": []})
-    
-    cache_key = f"chat_history:{user['id']}"
-    if session_id:
-        cache_key += f":{session_id}"
-    
-    cached_history = redis_manager.get_cache(cache_key)
-    if cached_history:
-        logger.info(f"Returning cached chat history for user {user['id']}")
-        return JSONResponse(content={"history": cached_history})
-    
     try:
+        user = await get_current_user(request)
+        if not user:
+            return JSONResponse(content={"history": []})
+        
+        cache_key = f"chat_history:{user['id']}"
+        if session_id:
+            cache_key += f":{session_id}"
+        
+        cached_history = redis_manager.get_cache(cache_key)
+        if cached_history:
+            logger.info(f"Returning cached chat history for user {user['id']}")
+            return JSONResponse(content={"history": cached_history})
+        
         history = await db.get_chat_history(user['id'], session_id)
-        redis_manager.set_cache(cache_key, history)
-        return JSONResponse(content={"history": history})
+        if history:
+            redis_manager.set_cache(cache_key, history)
+        return JSONResponse(content={"history": history or []})
     except Exception as e:
         logger.error(f"Error fetching chat history: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return empty history instead of 500 error
+        return JSONResponse(
+            content={"history": [], "error": "Failed to fetch chat history"},
+            status_code=200
+        )
 
 # Setup session cleanup background task
 @app.on_event("startup")

@@ -2,6 +2,10 @@ from datetime import datetime
 import uuid
 from typing import List, Optional
 from fastapi import HTTPException
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 class Database:
     def __init__(self, supabase_client):
