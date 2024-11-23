@@ -1,10 +1,4 @@
 from datetime import datetime
-import logging
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 import uuid
 from typing import List, Optional
 from fastapi import HTTPException
@@ -46,26 +40,12 @@ class Database:
 
     async def get_chat_history(self, user_id: str, session_id: Optional[str] = None, limit: int = 50) -> List[dict]:
         try:
-            logger.info(f"Fetching chat history for user {user_id} and session {session_id}")
-            
-            # Verify session exists if provided
-            if session_id:
-                session_check = self.supabase.table('chat_sessions')\
-                    .select('id')\
-                    .eq('id', session_id)\
-                    .eq('user_id', user_id)\
-                    .execute()
-                    
-                if not session_check.data:
-                    logger.warning(f"Chat session {session_id} not found for user {user_id}")
-                    raise HTTPException(status_code=404, detail="Chat session not found")
-            
             # Build query with exact column names and proper timestamp field
             query = self.supabase.table('user_chat_history')\
-                .select('id,user_id,session_id,message,chat_type,"TIMESTAMP"')\
+                .select('id,user_id,session_id,message,chat_type,"TIMESTAMP",last_updated')\
                 .eq('user_id', user_id)\
                 .is_('deleted_at', 'null')\
-                .order('TIMESTAMP', asc=True)\
+                .order('TIMESTAMP', desc=True)\
                 .limit(limit)
             
             if session_id:
@@ -74,35 +54,9 @@ class Database:
             response = query.execute()
             
             if not response.data:
-                logger.info(f"No chat history found for user {user_id}")
                 return []
-            
-            # Format response to match frontend expectations
-            formatted_messages = []
-            for msg in response.data:
-                # Normalize chat_type to either 'user' or 'bot'
-                chat_type = 'bot' if msg['chat_type'] in ['bot', 'assistant'] else 'user'
                 
-                # Ensure timestamp is in ISO format
-                try:
-                    timestamp = datetime.fromisoformat(msg['TIMESTAMP'].replace('Z', '+00:00'))
-                    formatted_timestamp = timestamp.isoformat()
-                except (ValueError, AttributeError):
-                    logger.warning(f"Invalid timestamp format for message {msg['id']}")
-                    formatted_timestamp = datetime.utcnow().isoformat()
-                
-                formatted_messages.append({
-                    'id': str(msg['id']),
-                    'user_id': str(msg['user_id']),
-                    'session_id': str(msg['session_id']),
-                    'message': msg['message'],
-                    'chat_type': chat_type,
-                    'timestamp': formatted_timestamp
-                })
-            
-            logger.info(f"Retrieved and formatted {len(formatted_messages)} messages for user {user_id}")
-            logger.debug(f"Sample message format: {formatted_messages[0] if formatted_messages else 'No messages'}")
-            return formatted_messages
+            return response.data
         except Exception as e:
             logger.error(f"Database error in get_chat_history: {str(e)}")
             if 'violates foreign key constraint' in str(e):

@@ -30,41 +30,8 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
   }, [chatMessages]);
 
   useEffect(() => {
-    const fetchChatHistory = async () => {
-      try {
-        const url = chatId ? `/chat_history?session_id=${chatId}` : '/chat_history';
-        const response = await fetch(url, {
-          credentials: 'include'
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch chat history: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        if (Array.isArray(data)) {
-          const formattedMessages = data.map(msg => ({
-            type: msg.chat_type === 'bot' ? 'bot' as const : 'user' as const,
-            content: msg.message
-          }));
-          setChatMessages(formattedMessages);
-        } else {
-          console.error('Invalid chat history format:', data);
-          setChatMessages([]);
-        }
-      } catch (error) {
-        console.error('Error fetching chat history:', error);
-        setError('Failed to load chat history. Please try again.');
-        setChatMessages([]);
-      }
-    };
-
-    if (chatId) {
-      fetchChatHistory();
-    } else {
-      setChatMessages(initialMessages || []);
-    }
-  }, [chatId, initialMessages]);
+    setChatMessages(initialMessages);
+  }, [initialMessages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,11 +48,6 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
         formData.append('videos', file);
       });
 
-      // Add session_id to formData if available
-      if (chatId) {
-        formData.append('session_id', chatId);
-      }
-      
       const response = await fetch('/send_message', {
         method: 'POST',
         body: formData,

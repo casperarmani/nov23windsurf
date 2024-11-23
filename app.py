@@ -21,7 +21,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
 
 from chatbot import Chatbot
-from database import Database, create_user, get_user_by_email, get_video_analysis_history
+from database import Database, create_user, get_user_by_email
 from redis_storage import RedisFileStorage
 from redis_manager import RedisManager, TaskType, TaskPriority
 from session_config import (
@@ -100,6 +100,64 @@ async def get_current_user(request: Request, return_none=False):
             return None
         raise HTTPException(status_code=401, detail="Authentication error")
 
+
+import os
+from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from fastapi.security import OAuth2AuthorizationCodeBearer
+from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
+from starlette.requests import Request
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from chatbot import Chatbot
+from database import create_user, get_user_by_email, insert_chat_message, get_chat_history
+from database import insert_video_analysis, get_video_analysis_history, check_user_exists
+from dotenv import load_dotenv
+import uvicorn
+from supabase.client import create_client, Client
+import uuid
+import logging
+from typing import List, Dict, Optional, Any
+from datetime import datetime, timedelta
+import time
+import jwt
+from fastapi.responses import Response
+from redis_storage import RedisFileStorage
+from redis_manager import RedisManager, TaskType, TaskPriority
+import asyncio
+import secrets
+import httpx
+from session_config import (
+    SESSION_LIFETIME,
+    SESSION_REFRESH_THRESHOLD,
+    COOKIE_SECURE,
+    COOKIE_HTTPONLY,
+    COOKIE_SAMESITE,
+    SESSION_CLEANUP_INTERVAL
+)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+load_dotenv()
+
+redis_url = os.getenv('REDIS_URL')
+if not redis_url:
+    raise ValueError("REDIS_URL environment variable is not set")
+
+redis_storage = RedisFileStorage(redis_url)
+redis_manager = RedisManager(redis_url)
+
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_ANON_KEY")
+
+if not supabase_url or not supabase_key:
+    raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables")
+
+supabase: Client = create_client(supabase_url, supabase_key)
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Video Analysis Chatbot",
@@ -108,6 +166,20 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc"
 )
+
+# Chat Session endpoints
+@app.post("/chat_sessions")
+async def create_chat_session(
+    session: ChatSession,
+    user: dict = Depends(get_current_user)
+) -> JSONResponse:
+    """Create a new chat session for the user."""
+    try:
+        result = await db.create_chat_session(user['id'], session.title)
+        return JSONResponse(content=result)
+    except Exception as e:
+        logger.error(f"Error creating chat session: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/chat_sessions")
 async def get_chat_sessions(
@@ -142,27 +214,11 @@ async def get_chat_history(
 ) -> JSONResponse:
     """Get chat history for a specific session or all sessions."""
     try:
-        logger.info(f"Getting chat history for user {user['id']} and session {session_id}")
         messages = await db.get_chat_history(user['id'], session_id)
-        
-        # Additional validation of the response format
-        if not isinstance(messages, list):
-            logger.error(f"Invalid response format from database: {messages}")
-            raise HTTPException(
-                status_code=500,
-                detail="Invalid response format from database"
-            )
-            
         return JSONResponse(content=messages)
-    except HTTPException:
-        raise
     except Exception as e:
-        error_msg = f"Error getting chat history: {str(e)}"
-        logger.error(error_msg)
-        raise HTTPException(
-            status_code=500,
-            detail=error_msg
-        )
+        logger.error(f"Error getting chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/send_message")
 async def send_message(
@@ -174,12 +230,6 @@ async def send_message(
 ) -> JSONResponse:
     """Send a message and optionally process videos in a chat session."""
     try:
-        # Create new session if none provided
-        if not session_id:
-            new_session = await db.create_chat_session(user['id'], "New Chat")
-            session_id = new_session['id']
-            logger.info(f"Created new chat session {session_id} for user {user['id']}")
-
         # Process videos if provided
         video_response = None
         if videos and len(videos) > 0:
@@ -187,22 +237,16 @@ async def send_message(
                 content = await video.read()
                 file_id = str(uuid.uuid4())
                 await redis_storage.store_file(file_id, content)
-                analysis_result = await chatbot.analyze_video(file_id, video.filename)
-                video_response = analysis_result[0] if analysis_result else None
-                metadata = analysis_result[1] if analysis_result else None
+                video_response = await chatbot.analyze_video(file_id, video.filename)
 
         # Process the chat message
         chat_response = await chatbot.send_message(message)
         final_response = video_response if video_response else chat_response
         
         # Save the conversation to the database with session_id
-        result = await db.save_chat_message(user['id'], message, final_response, session_id)
+        await db.save_chat_message(user['id'], message, final_response, session_id)
         
-        return JSONResponse(content={
-            "response": final_response,
-            "session_id": session_id,
-            "messages": result
-        })
+        return JSONResponse(content={"response": final_response})
     except Exception as e:
         logger.error(f"Error processing message: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -243,6 +287,38 @@ app.add_middleware(
 # API routes will be defined here first
 
 chatbot = Chatbot()
+
+async def get_current_user(request: Request, return_none=False):
+    try:
+        session_id = request.cookies.get('session_id')
+        if not session_id:
+            if return_none:
+                return None
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        is_valid, session_data = redis_manager.validate_session(session_id)
+        if not is_valid or not session_data:
+            if return_none:
+                return None
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+        if not isinstance(session_data, dict) or 'id' not in session_data:
+            if return_none:
+                return None
+            raise HTTPException(status_code=401, detail="Invalid session data")
+
+        # Check if session needs refresh
+        current_time = time.time()
+        last_refresh = session_data.get('last_refresh', 0)
+        if current_time - last_refresh > SESSION_REFRESH_THRESHOLD:
+            await redis_manager.refresh_session(session_id)
+
+        return session_data
+    except Exception as e:
+        logger.error(f"Error in get_current_user: {str(e)}")
+        if return_none:
+            return None
+        raise HTTPException(status_code=401, detail="Authentication error")
 
 @app.post('/login')
 async def login_post(
@@ -402,6 +478,25 @@ async def auth_status(request: Request):
 @app.get("/", response_class=HTMLResponse)
 async def serve_react_app(request: Request):
     return FileResponse("static/react/index.html")
+
+
+
+@app.get("/chat_history")
+async def get_chat_history_endpoint(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(content={"history": []})
+    
+    cache_key = f"chat_history:{user['id']}"
+    cached_history = redis_manager.get_cache(cache_key)
+    
+    if cached_history:
+        logger.info(f"Returning cached chat history for user {user['id']}")
+        return JSONResponse(content={"history": cached_history})
+        
+    history = await get_chat_history(uuid.UUID(user['id']))
+    redis_manager.set_cache(cache_key, history)
+    return JSONResponse(content={"history": history})
 
 @app.get("/video_analysis_history")
 async def get_video_analysis_history_endpoint(request: Request):
