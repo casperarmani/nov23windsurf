@@ -65,31 +65,26 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
     }
   };
 
+  // Update messages when user or chatId changes
   useEffect(() => {
-    if (user) {
+    if (user && chatId) {
       fetchChatHistory();
     }
-  }, [user]);
+  }, [user, chatId]);
 
+  // Auto-scroll when messages change
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
 
-  // Initialize chat messages only once when the component mounts
+  // Update messages when initialMessages changes
   useEffect(() => {
     if (initialMessages?.length > 0) {
       setChatMessages(initialMessages);
     }
-  }, []);
-
-  // Update messages when chatId changes
-  useEffect(() => {
-    if (chatId) {
-      fetchChatHistory();
-    }
-  }, [chatId]);
+  }, [initialMessages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

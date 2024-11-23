@@ -1,6 +1,8 @@
 export interface Message {
   type: 'user' | 'bot' | 'error';
   content: string;
+  timestamp?: string;
+  sessionId?: string;
 }
 
 export interface ChatHistory {
