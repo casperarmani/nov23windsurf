@@ -65,16 +65,28 @@ class Database:
                 logger.info(f"No chat history found for user {user_id}")
                 return []
                 
-            # Transform data to match frontend ChatHistory interface
+            # Comprehensive transformation of data
             transformed_history = []
             for msg in response.data:
-                transformed_msg = {
-                    'TIMESTAMP': msg.get('TIMESTAMP') or datetime.now().isoformat(),
-                    'chat_type': msg.get('chat_type', 'user'),  # Default to 'user'
-                    'message': msg.get('message', ''),
-                    'id': msg.get('id')
-                }
-                transformed_history.append(transformed_msg)
+                try:
+                    # Ensure all required fields are present with fallback values
+                    transformed_msg = {
+                        'TIMESTAMP': (
+                            msg.get('TIMESTAMP') or 
+                            msg.get('timestamp') or 
+                            msg.get('last_updated') or 
+                            datetime.now().isoformat()
+                        ),
+                        'chat_type': msg.get('chat_type', 'user'),
+                        'message': msg.get('message', ''),
+                        'id': str(msg.get('id') or uuid.uuid4())
+                    }
+                    transformed_history.append(transformed_msg)
+                except Exception as transform_error:
+                    logger.error(f"Error transforming chat history item: {transform_error}")
+            
+            # Log transformed data for debugging
+            logger.info(f"Transformed chat history for user {user_id}: {transformed_history}")
             
             return transformed_history
         

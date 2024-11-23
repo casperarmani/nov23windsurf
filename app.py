@@ -15,11 +15,10 @@ from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, sta
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2AuthorizationCodeBearer
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
-
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from chatbot import Chatbot
 from database import Database, create_user, get_user_by_email
 from redis_storage import RedisFileStorage
@@ -503,20 +502,34 @@ async def get_chat_history_endpoint(request: Request):
             logger.error(f"Database error fetching chat history: {str(db_error)}")
             return JSONResponse(
                 status_code=500, 
-                content={"history": [], "error": "Failed to retrieve chat history"}
+                content={"history": [], "error": str(db_error)}
             )
         
-        # Cache the history for future requests
-        if history:
-            redis_manager.set_cache(cache_key, history, expire_seconds=3600)  # 1 hour cache
+        # Ensure consistent format
+        formatted_history = []
+        for item in history:
+            formatted_item = {
+                "TIMESTAMP": item.get('TIMESTAMP') or item.get('timestamp') or datetime.now().isoformat(),
+                "chat_type": item.get('chat_type', 'user'),
+                "message": item.get('message', ''),
+                "id": item.get('id') or str(uuid.uuid4())
+            }
+            formatted_history.append(formatted_item)
         
-        return JSONResponse(content={"history": history or []})
+        # Cache the history for future requests
+        if formatted_history:
+            redis_manager.set_cache(cache_key, formatted_history, expire_seconds=3600)  # 1 hour cache
+        
+        # Log the formatted history for debugging
+        logger.info(f"Formatted Chat History: {formatted_history}")
+        
+        return JSONResponse(content={"history": formatted_history})
     
     except Exception as e:
         logger.error(f"Unexpected error in chat history endpoint: {str(e)}")
         return JSONResponse(
             status_code=500, 
-            content={"history": [], "error": "Internal server error"}
+            content={"history": [], "error": str(e)}
         )
 
 @app.get("/video_analysis_history")
