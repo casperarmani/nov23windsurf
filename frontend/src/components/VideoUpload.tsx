@@ -4,11 +4,14 @@ import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Upload } from 'lucide-react';
 
+import { useChat } from '../context/ChatContext';
+
 interface VideoUploadProps {
   onUploadComplete?: () => void;
 }
 
 function VideoUpload({ onUploadComplete }: VideoUploadProps) {
+  const { currentSession } = useChat();
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,10 +30,15 @@ function VideoUpload({ onUploadComplete }: VideoUploadProps) {
     setError(null);
     
     try {
+      if (!currentSession) {
+        throw new Error('No active chat session');
+      }
+
       const formData = new FormData();
       
-      // Add message field
+      // Add message and session fields
       formData.append('message', 'Video upload');
+      formData.append('session_id', currentSession.id);
       
       // Append each video file
       files.forEach((file) => {
