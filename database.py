@@ -1,4 +1,10 @@
 from datetime import datetime
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 import uuid
 from typing import List, Optional
 from fastapi import HTTPException

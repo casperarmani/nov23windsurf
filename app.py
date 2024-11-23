@@ -481,11 +481,7 @@ async def serve_react_app(request: Request):
 
 
 
-@app.get("/chat_history")
-async def get_chat_history_endpoint(request: Request):
-    user = await get_current_user(request)
-    if not user:
-        return JSONResponse(content={"history": []})
+# End of file
     
     cache_key = f"chat_history:{user['id']}"
     cached_history = redis_manager.get_cache(cache_key)
