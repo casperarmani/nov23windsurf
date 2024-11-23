@@ -40,26 +40,39 @@ function App() {
       const chatHistory = Array.isArray(chatData) ? chatData : [];
       console.log('Raw Chat History:', chatHistory);
       
-      // Update cache if session-specific
-      if (sessionId) {
-        setSessionCache(prev => ({
-          ...prev,
-          [sessionId]: chatHistory
-        }));
-      }
+      // Group messages by session_id
+      const groupedBySession = chatHistory.reduce((acc: { [key: string]: ChatHistory[] }, msg) => {
+        const sessionId = msg.session_id || 'default';
+        if (!acc[sessionId]) {
+          acc[sessionId] = [];
+        }
+        acc[sessionId].push(msg);
+        return acc;
+      }, {});
 
-      // Convert to Chat objects only for the current session
-      const convertedChats = chatHistory.map(chatItem => ({
-        id: chatItem.id || crypto.randomUUID(),
-        title: chatItem.message?.slice(0, 30) || 'Untitled Chat',
-        messages: [{
-          // Fix chat type conversion here
-          type: chatItem.chat_type === 'text' ? 'user' : chatItem.chat_type as 'user' | 'bot' | 'error',
-          content: chatItem.message || ''
-        }],
-        timestamp: chatItem.TIMESTAMP,
-        session_id: chatItem.session_id
+      // Update cache with all sessions
+      setSessionCache(prev => ({
+        ...prev,
+        ...groupedBySession
       }));
+
+      // Convert to Chat objects
+      const convertedChats = Object.entries(groupedBySession).map(([sessionId, messages]) => {
+        const sortedMessages = [...messages].sort((a, b) => 
+          new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
+        );
+        
+        return {
+          id: sessionId,
+          title: sortedMessages[0]?.message?.slice(0, 30) || 'Untitled Chat',
+          messages: sortedMessages.map(msg => ({
+            type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'user' | 'bot' | 'error',
+            content: msg.message || ''
+          })),
+          timestamp: sortedMessages[0]?.TIMESTAMP,
+          session_id: sessionId
+        };
+      });
 
       console.log('Converted Chats:', convertedChats);
 

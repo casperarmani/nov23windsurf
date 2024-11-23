@@ -27,15 +27,29 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
 
   const fetchChatHistory = async () => {
     try {
-      const response = await fetch('/chat_history');
+      if (!chatId) {
+        setChatMessages([]);
+        return;
+      }
+      
+      const response = await fetch(`/chat_history?session_id=${chatId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch chat history');
       }
       const data = await response.json();
-      const transformedMessages: Message[] = (data.history || []).map((msg: ChatHistory) => ({
+      if (!Array.isArray(data)) {
+        throw new Error('Invalid chat history format');
+      }
+      
+      const sortedMessages = [...data].sort((a, b) => 
+        new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
+      );
+      
+      const transformedMessages: Message[] = sortedMessages.map((msg) => ({
         type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'bot' | 'user' | 'error',
         content: msg.message
       }));
+      
       setChatMessages(transformedMessages);
     } catch (error) {
       console.error('Failed to fetch chat history:', error);
