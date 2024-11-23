@@ -27,120 +27,48 @@ function App() {
         return;
       }
 
+      // Only fetch messages for specific session if provided
       const url = sessionId ? `/chat_history?session_id=${sessionId}` : '/chat_history';
-      const [chatResponse, videoResponse] = await Promise.all([
-        fetch(url),
-        fetch('/video_analysis_history')
-      ]);
-
+      const chatResponse = await fetch(url);
+      
       console.log('Response Status:', {
-        chat: chatResponse.status,
-        video: videoResponse.status
+        chat: chatResponse.status
       });
 
       // Process chat history response
-      let chatHistory: ChatHistory[] = [];
-      try {
-        const chatData = await chatResponse.json();
-        chatHistory = Array.isArray(chatData) ? chatData : [];
-        console.log('Raw Chat History:', chatHistory);
-
-        // Update cache if session-specific
-        if (sessionId) {
-          setSessionCache(prev => ({
-            ...prev,
-            [sessionId]: chatHistory
-          }));
-        }
-      } catch (error) {
-        console.error('Error parsing chat response:', error);
-        setError('Failed to load chat history');
+      const chatData = await chatResponse.json();
+      const chatHistory = Array.isArray(chatData) ? chatData : [];
+      console.log('Raw Chat History:', chatHistory);
+      
+      // Update cache if session-specific
+      if (sessionId) {
+        setSessionCache(prev => ({
+          ...prev,
+          [sessionId]: chatHistory
+        }));
       }
 
-      // Handle video history
-      let videoHistory: VideoHistory[] = [];
-      try {
-        const videoData = await videoResponse.json();
-        videoHistory = Array.isArray(videoData) ? videoData : [];
-        console.log('Raw Video History:', videoHistory);
-      } catch (error) {
-        console.error('Error parsing video response:', error);
-        setError('Failed to load video history');
-      }
-
-      // Convert to Chat objects only if needed for current session
-      const convertedChats = chatHistory
-        .filter(chat => !sessionId || chat.session_id === sessionId)
-        .map(chatItem => {
-          try {
-            return {
-              id: chatItem.id || crypto.randomUUID(),
-              title: chatItem.message?.slice(0, 30) || 'Untitled Chat',
-              messages: [{
-                type: chatItem.chat_type === 'text' ? 'user' : chatItem.chat_type,
-                content: chatItem.message || ''
-              }],
-              timestamp: chatItem.TIMESTAMP,
-              session_id: chatItem.session_id
-            };
-          } catch (error) {
-            console.error('Error converting chat item:', error, chatItem);
-            return null;
-          }
-        })
-        .filter((chat): chat is Chat => chat !== null);
+      // Convert to Chat objects only for the current session
+      const convertedChats = chatHistory.map(chatItem => ({
+        id: chatItem.id || crypto.randomUUID(),
+        title: chatItem.message?.slice(0, 30) || 'Untitled Chat',
+        messages: [{
+          type: chatItem.chat_type === 'text' ? 'user' : 'bot',
+          content: chatItem.message || ''
+        }],
+        timestamp: chatItem.TIMESTAMP,
+        session_id: chatItem.session_id
+      }));
 
       console.log('Converted Chats:', convertedChats);
 
-      // Sanitize histories with comprehensive fallback values
-      const sanitizedChatHistory = chatHistory.length > 0 
-        ? chatHistory.map(chat => ({
-            TIMESTAMP: chat.TIMESTAMP || chat.timestamp || new Date().toISOString(),
-            chat_type: chat.chat_type || 'user',
-            message: chat.message || '',
-            id: chat.id || crypto.randomUUID()
-          }))
-        : [];
-
-      const sanitizedVideoHistory = videoHistory.map(video => ({
-        TIMESTAMP: video.TIMESTAMP || video.timestamp || new Date().toISOString(),
-        upload_file_name: video.upload_file_name || 'Unknown File',
-        analysis: video.analysis || 'No analysis available',
-        id: video.id || crypto.randomUUID()
-      }));
-
-      // Sorting chats by timestamp to ensure chronological order
-      const sortedChats = convertedChats.sort((a, b) => 
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
-
-      console.log('Sorted Chats:', sortedChats);
-      console.log('Sanitized Chat History:', sanitizedChatHistory);
-
-      // Update states with sorted and sanitized data
-      setChatHistory(sanitizedChatHistory);
-      setVideoHistory(sanitizedVideoHistory);
-      setChats(sortedChats);
-
-      // Optional: Set current chat to most recent if no current chat
-      if (!currentChatId && sortedChats.length > 0) {
-        setCurrentChatId(sortedChats[0].id);
-      }
-
+      // Update states
+      setChatHistory(chatHistory);
+      setChats(convertedChats);
+      
     } catch (error) {
-      console.error('Complete Error in fetchHistories:', error);
-      
-      // More informative error handling
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : 'An unexpected error occurred while fetching data';
-      
-      setError(errorMessage);
-      
-      // Ensure clean state even on error
-      setChatHistory([]);
-      setVideoHistory([]);
-      setChats([]);
+      console.error('Error fetching chat history:', error);
+      setError('Failed to load chat history');
     }
   };
 
