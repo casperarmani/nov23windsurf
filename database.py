@@ -48,7 +48,7 @@ class Database:
                 logger.warning("Attempted to retrieve chat history with empty user_id")
                 return []
 
-            # Build query with exact column names and proper timestamp field
+            # Build comprehensive query
             query = self.supabase.table('user_chat_history')\
                 .select('id,user_id,session_id,message,chat_type,"TIMESTAMP",last_updated')\
                 .eq('user_id', user_id)\
@@ -56,6 +56,7 @@ class Database:
                 .order('TIMESTAMP', desc=True)\
                 .limit(limit)
             
+            # Optional session_id filtering
             if session_id:
                 query = query.eq('session_id', session_id)
             
@@ -79,11 +80,18 @@ class Database:
                         ),
                         'chat_type': msg.get('chat_type', 'user'),
                         'message': msg.get('message', ''),
-                        'id': str(msg.get('id') or uuid.uuid4())
+                        'id': str(msg.get('id') or uuid.uuid4()),
+                        'session_id': msg.get('session_id')  # Include session_id
                     }
                     transformed_history.append(transformed_msg)
                 except Exception as transform_error:
                     logger.error(f"Error transforming chat history item: {transform_error}")
+            
+            # Sort transformed history by timestamp
+            transformed_history.sort(
+                key=lambda x: datetime.fromisoformat(x['TIMESTAMP']), 
+                reverse=True
+            )
             
             # Log transformed data for debugging
             logger.info(f"Transformed chat history for user {user_id}: {transformed_history}")

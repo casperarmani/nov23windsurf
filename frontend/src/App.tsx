@@ -19,58 +19,51 @@ function App() {
         fetch('/video_analysis_history')
       ]);
 
-      console.log('Chat Response Status:', chatResponse.status);
-      console.log('Video Response Status:', videoResponse.status);
-
       if (!chatResponse.ok || !videoResponse.ok) {
-        const chatText = await chatResponse.text();
-        const videoText = await videoResponse.text();
-        console.error('Chat Response Text:', chatText);
-        console.error('Video Response Text:', videoText);
         throw new Error('Failed to fetch history data');
       }
 
       const chatData: ApiResponse<ChatHistory> = await chatResponse.json();
       const videoData: ApiResponse<VideoHistory> = await videoResponse.json();
-      
-      console.log('Raw Chat Data:', JSON.stringify(chatData, null, 2));
-      console.log('Raw Video Data:', JSON.stringify(videoData, null, 2));
 
-      // Detailed validation with more informative error messages
-      if (!chatData) {
-        throw new Error('No chat history data received');
-      }
+      // Ensure consistent data format
+      const chatHistory = Array.isArray(chatData.history) 
+        ? chatData.history 
+        : (chatData.history || []);
 
-      // Check if chatData is an array or has a history property
-      const chatHistory = Array.isArray(chatData) ? chatData : chatData.history;
+      const videoHistory = Array.isArray(videoData.history) 
+        ? videoData.history 
+        : (videoData.history || []);
 
-      if (!Array.isArray(chatHistory)) {
-        console.error('Invalid chat history format:', chatData);
-        throw new Error('Invalid chat history data format');
-      }
+      // More robust chat history conversion
+      const convertedChats: Chat[] = chatHistory.reduce((acc: Chat[], chatItem) => {
+        const existingChat = acc.find(chat => 
+          chat.messages[0]?.content === chatItem.message
+        );
 
-      // Similar checks for video data
-      const videoHistory = Array.isArray(videoData) ? videoData : videoData.history;
+        if (existingChat) {
+          existingChat.messages.push({
+            type: chatItem.chat_type || 'user',
+            content: chatItem.message || ''
+          });
+        } else {
+          acc.push({
+            id: chatItem.id || crypto.randomUUID(),
+            title: chatItem.message.length > 30 
+              ? chatItem.message.slice(0, 30) + '...' 
+              : (chatItem.message || 'Untitled Chat'),
+            messages: [{
+              type: chatItem.chat_type || 'user',
+              content: chatItem.message || ''
+            }],
+            timestamp: chatItem.TIMESTAMP || new Date().toISOString()
+          });
+        }
 
-      if (!Array.isArray(videoHistory)) {
-        console.error('Invalid video history format:', videoData);
-        throw new Error('Invalid video history data format');
-      }
+        return acc;
+      }, []);
 
-      // Convert chat history to chats
-      const convertedChats: Chat[] = chatHistory.map(chatItem => ({
-        id: chatItem.id || crypto.randomUUID(),
-        title: chatItem.message.length > 30 
-          ? chatItem.message.slice(0, 30) + '...' 
-          : (chatItem.message || 'Untitled Chat'),
-        messages: [{
-          type: chatItem.chat_type || 'user',
-          content: chatItem.message || ''
-        }],
-        timestamp: chatItem.TIMESTAMP || new Date().toISOString()
-      }));
-
-      // Sanitize and set states
+      // Sanitize histories with comprehensive fallback values
       const sanitizedChatHistory = chatHistory.map(chat => ({
         TIMESTAMP: chat.TIMESTAMP || chat.timestamp || new Date().toISOString(),
         chat_type: chat.chat_type || 'user',
@@ -85,22 +78,32 @@ function App() {
         id: video.id || crypto.randomUUID()
       }));
 
-      // Update states
+      // Sorting chats by timestamp to ensure chronological order
+      convertedChats.sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+
+      // Update states with sorted and sanitized data
       setChatHistory(sanitizedChatHistory);
       setVideoHistory(sanitizedVideoHistory);
       setChats(convertedChats);
 
-      console.log('Converted Chats:', convertedChats);
-      console.log('Sanitized Chat History:', sanitizedChatHistory);
-      console.log('Sanitized Video History:', sanitizedVideoHistory);
+      // Optional: Set current chat to most recent if no current chat
+      if (!currentChatId && convertedChats.length > 0) {
+        setCurrentChatId(convertedChats[0].id);
+      }
+
     } catch (error) {
-      console.error('Complete Error Object:', error);
-      console.error('Error Name:', error instanceof Error ? error.name : 'Unknown Error');
-      console.error('Error Message:', error instanceof Error ? error.message : 'No message');
+      console.error('Complete Error in fetchHistories:', error);
       
-      setError(error instanceof Error ? error.message : 'An unexpected error occurred while fetching data');
+      // More informative error handling
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'An unexpected error occurred while fetching data';
       
-      // Set empty arrays to prevent undefined errors
+      setError(errorMessage);
+      
+      // Ensure clean state even on error
       setChatHistory([]);
       setVideoHistory([]);
       setChats([]);

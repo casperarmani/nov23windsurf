@@ -488,14 +488,7 @@ async def get_chat_history_endpoint(request: Request):
                 content={"history": [], "error": "Unauthorized"}
             )
         
-        cache_key = f"chat_history:{user['id']}"
-        cached_history = redis_manager.get_cache(cache_key)
-        
-        if cached_history:
-            logger.info(f"Returning cached chat history for user {user['id']}")
-            return JSONResponse(content={"history": cached_history})
-        
-        # Fetch chat history from database
+        # Remove cache-related complexity for now
         try:
             history = await get_chat_history(uuid.UUID(user['id']))
         except Exception as db_error:
@@ -505,25 +498,31 @@ async def get_chat_history_endpoint(request: Request):
                 content={"history": [], "error": str(db_error)}
             )
         
-        # Ensure consistent format
+        # Comprehensive history formatting
         formatted_history = []
         for item in history:
-            formatted_item = {
-                "TIMESTAMP": item.get('TIMESTAMP') or item.get('timestamp') or datetime.now().isoformat(),
-                "chat_type": item.get('chat_type', 'user'),
-                "message": item.get('message', ''),
-                "id": item.get('id') or str(uuid.uuid4())
-            }
-            formatted_history.append(formatted_item)
+            try:
+                formatted_item = {
+                    "TIMESTAMP": item.get('TIMESTAMP') or item.get('timestamp') or datetime.now().isoformat(),
+                    "chat_type": item.get('chat_type', 'user'),
+                    "message": item.get('message', ''),
+                    "id": str(item.get('id') or uuid.uuid4()),
+                    "session_id": item.get('session_id')  # Add session_id for better tracking
+                }
+                formatted_history.append(formatted_item)
+            except Exception as format_error:
+                logger.warning(f"Could not format history item: {format_error}")
         
-        # Cache the history for future requests
-        if formatted_history:
-            redis_manager.set_cache(cache_key, formatted_history, expire_seconds=3600)  # 1 hour cache
+        # Sort history by timestamp
+        formatted_history.sort(
+            key=lambda x: datetime.fromisoformat(x['TIMESTAMP']), 
+            reverse=True
+        )
         
-        # Log the formatted history for debugging
-        logger.info(f"Formatted Chat History: {formatted_history}")
-        
-        return JSONResponse(content={"history": formatted_history})
+        return JSONResponse(content={
+            "history": formatted_history,
+            "total_count": len(formatted_history)
+        })
     
     except Exception as e:
         logger.error(f"Unexpected error in chat history endpoint: {str(e)}")
