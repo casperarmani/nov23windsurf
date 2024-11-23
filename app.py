@@ -21,7 +21,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
 
 from chatbot import Chatbot
-from database import Database
+from database import Database, create_user, get_user_by_email
 from redis_storage import RedisFileStorage
 from redis_manager import RedisManager, TaskType, TaskPriority
 from session_config import (
@@ -101,7 +101,62 @@ async def get_current_user(request: Request, return_none=False):
         raise HTTPException(status_code=401, detail="Authentication error")
 
 
+import os
+from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
+from fastapi.security import OAuth2AuthorizationCodeBearer
+from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
+from starlette.requests import Request
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from chatbot import Chatbot
+from database import create_user, get_user_by_email, insert_chat_message, get_chat_history
+from database import insert_video_analysis, get_video_analysis_history, check_user_exists
+from dotenv import load_dotenv
+import uvicorn
+from supabase.client import create_client, Client
+import uuid
+import logging
+from typing import List, Dict, Optional, Any
+from datetime import datetime, timedelta
+import time
+import jwt
+from fastapi.responses import Response
+from redis_storage import RedisFileStorage
+from redis_manager import RedisManager, TaskType, TaskPriority
+import asyncio
+import secrets
+import httpx
+from session_config import (
+    SESSION_LIFETIME,
+    SESSION_REFRESH_THRESHOLD,
+    COOKIE_SECURE,
+    COOKIE_HTTPONLY,
+    COOKIE_SAMESITE,
+    SESSION_CLEANUP_INTERVAL
+)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+load_dotenv()
+
+redis_url = os.getenv('REDIS_URL')
+if not redis_url:
+    raise ValueError("REDIS_URL environment variable is not set")
+
+redis_storage = RedisFileStorage(redis_url)
+redis_manager = RedisManager(redis_url)
+
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_ANON_KEY")
+
+if not supabase_url or not supabase_key:
+    raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables")
+
+supabase: Client = create_client(supabase_url, supabase_key)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -291,9 +346,9 @@ async def login_post(
                 content={"success": False, "message": "Invalid credentials"}
             )
 
-        user = await db.get_user_by_email(email)
+        user = await get_user_by_email(email)
         if not user:
-            user = await db.create_user(email)
+            user = await create_user(email)
 
         session_id = secrets.token_urlsafe(32)
         session_data = {
@@ -426,19 +481,39 @@ async def serve_react_app(request: Request):
 
 
 
-
+@app.get("/chat_history")
+async def get_chat_history_endpoint(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(content={"history": []})
+    
+    cache_key = f"chat_history:{user['id']}"
+    cached_history = redis_manager.get_cache(cache_key)
+    
+    if cached_history:
+        logger.info(f"Returning cached chat history for user {user['id']}")
+        return JSONResponse(content={"history": cached_history})
+        
+    history = await get_chat_history(uuid.UUID(user['id']))
+    redis_manager.set_cache(cache_key, history)
+    return JSONResponse(content={"history": history})
 
 @app.get("/video_analysis_history")
-async def get_video_analysis_history_endpoint(
-    user: dict = Depends(get_current_user)
-) -> JSONResponse:
-    """Get video analysis history for the user."""
-    try:
-        history = await db.get_video_analysis_history(user['id'])
-        return JSONResponse(content={"history": history})
-    except Exception as e:
-        logger.error(f"Error getting video analysis history: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+async def get_video_analysis_history_endpoint(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return JSONResponse(content={"history": []})
+    
+    cache_key = f"video_history:{user['id']}"
+    cached_history = redis_manager.get_cache(cache_key)
+    
+    if cached_history:
+        logger.info(f"Returning cached video history for user {user['id']}")
+        return JSONResponse(content={"history": cached_history})
+        
+    history = await get_video_analysis_history(uuid.UUID(user['id']))
+    redis_manager.set_cache(cache_key, history)
+    return JSONResponse(content={"history": history})
 
 @app.get("/health")
 async def health_check():
