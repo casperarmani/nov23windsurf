@@ -1,28 +1,29 @@
 import React from 'react';
 import { Avatar, AvatarFallback } from '../ui/avatar';
-import { Message } from '@/types';
+import { ChatMessage as ChatMessageType } from '@/types';
 
 interface ChatMessageProps {
-  message: Message;
+  message: ChatMessageType;
 }
 
 export function ChatMessage({ message }: ChatMessageProps) {
   return (
-    <div className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-      <div className={`flex items-start max-w-[80%] ${message.type === 'user' ? 'flex-row-reverse' : ''}`}>
+    <div className={`flex ${message.chat_type === 'user' ? 'justify-end' : 'justify-start'}`}>
+      <div className={`flex items-start max-w-[80%] ${message.chat_type === 'user' ? 'flex-row-reverse' : ''}`}>
         <Avatar className="w-8 h-8 bg-white/10">
           <AvatarFallback className="text-white/80">
-            {message.type === 'user' ? 'ME' : message.type === 'bot' ? 'AI' : '!'}
+            {message.chat_type === 'user' ? 'ME' : 'AI'}
           </AvatarFallback>
         </Avatar>
         <div className={`mx-3 p-4 rounded-2xl ${
-          message.type === 'user' 
+          message.chat_type === 'user' 
             ? 'bg-white/10 backdrop-blur-lg' 
-            : message.type === 'error'
-            ? 'bg-red-500/10 backdrop-blur-lg'
             : 'bg-black/20 backdrop-blur-lg'
         }`}>
-          <p className="text-white/90 text-sm leading-relaxed">{message.content}</p>
+          <p className="text-white/90 text-sm leading-relaxed">{message.message}</p>
+          <p className="text-xs text-white/50 mt-1">
+            {new Date(message.timestamp).toLocaleTimeString()}
+          </p>
         </div>
       </div>
     </div>

@@ -6,16 +6,15 @@ import { ChatWelcome } from './chat/ChatWelcome';
 import { ChatMessage } from './chat/ChatMessage';
 import { ChatInput } from './chat/ChatInput';
 import { Upload, X } from 'lucide-react';
+import { useChat } from '../context/ChatContext';
 
 interface ChatContainerProps {
-  chatId?: string | null;
-  initialMessages?: Message[];
-  onMessageSent?: (messages: Message[], chatId: string) => void;
+  onUpload?: (files: File[]) => void;
 }
 
-function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatContainerProps) {
+function ChatContainer({ onUpload }: ChatContainerProps) {
+  const { currentSession, messages, sendMessage } = useChat();
   const [message, setMessage] = useState<string>('');
-  const [chatMessages, setChatMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -35,52 +34,24 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!message.trim() && files.length === 0) || isLoading) return;
+    if ((!message.trim() && files.length === 0) || isLoading || !currentSession) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append('message', message.trim());
-      
-      files.forEach((file) => {
-        formData.append('videos', file);
-      });
-
-      const response = await fetch('/send_message', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (files.length > 0 && onUpload) {
+        onUpload(files);
+        setFiles([]);
       }
 
-      const data = await response.json();
-      
-      const updatedMessages: Message[] = [
-        ...chatMessages,
-        { type: 'user' as const, content: message.trim() },
-        { type: 'bot' as const, content: data.response }
-      ];
-      
-      setChatMessages(updatedMessages);
-      if (chatId && onMessageSent) {
-        onMessageSent(updatedMessages, chatId);
+      if (message.trim()) {
+        await sendMessage(message.trim());
+        setMessage('');
       }
-      
-      setMessage('');
-      setFiles([]);
     } catch (err) {
       console.error('Error:', err);
       setError('Failed to send message. Please try again.');
-      setChatMessages(prev => [
-        ...prev,
-        { type: 'user', content: message.trim() },
-        { type: 'error', content: 'Failed to send message. Please try again.' }
-      ]);
     } finally {
       setIsLoading(false);
     }
