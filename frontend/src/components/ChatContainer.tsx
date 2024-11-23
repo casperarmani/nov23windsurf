@@ -43,6 +43,9 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
     try {
       const formData = new FormData();
       formData.append('message', message.trim());
+      if (chatId) {
+        formData.append('session_id', chatId);
+      }
       
       files.forEach((file) => {
         formData.append('videos', file);
@@ -67,8 +70,8 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
       ];
       
       setChatMessages(updatedMessages);
-      if (chatId && onMessageSent) {
-        onMessageSent(updatedMessages, chatId);
+      if (onMessageSent) {
+        onMessageSent(updatedMessages, data.session_id || chatId);
       }
       
       setMessage('');

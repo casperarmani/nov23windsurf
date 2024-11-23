@@ -9,9 +9,12 @@ class Database:
 
     async def create_chat_session(self, user_id: str, title: str = "New Chat") -> dict:
         try:
+            current_time = datetime.utcnow().isoformat()
             response = self.supabase.table('chat_sessions').insert({
                 'user_id': user_id,
-                'title': title
+                'title': title,
+                'created_at': current_time,
+                'updated_at': current_time
             }).execute()
             return response.data[0]
         except Exception as e:
@@ -22,6 +25,7 @@ class Database:
             response = self.supabase.table('chat_sessions')\
                 .select('*')\
                 .eq('user_id', user_id)\
+                .is_('deleted_at', 'null')\
                 .order('updated_at', desc=True)\
                 .execute()
             return response.data
@@ -38,55 +42,42 @@ class Database:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to update chat session: {str(e)}")
 
-    async def get_chat_history(self, user_id: str, session_id: Optional[str] = None, limit: int = 50) -> List[dict]:
+    async def get_chat_history(self, user_id: str, session_id: Optional[str] = None) -> List[dict]:
         try:
-            # Build query with exact column names and proper timestamp field
             query = self.supabase.table('user_chat_history')\
                 .select('id,user_id,session_id,message,chat_type,"TIMESTAMP",last_updated')\
                 .eq('user_id', user_id)\
                 .is_('deleted_at', 'null')\
-                .order('TIMESTAMP', desc=True)\
-                .limit(limit)
+                .order('TIMESTAMP', asc=True)
             
             if session_id:
                 query = query.eq('session_id', session_id)
             
             response = query.execute()
-            
-            if not response.data:
-                return []
-                
-            return response.data
+            return response.data if response.data else []
         except Exception as e:
             logger.error(f"Database error in get_chat_history: {str(e)}")
-            if 'violates foreign key constraint' in str(e):
-                raise HTTPException(status_code=400, detail="Invalid user ID")
             raise HTTPException(status_code=500, detail=f"Failed to get chat history: {str(e)}")
 
-    async def save_chat_message(self, user_id: str, message: str, response: str, session_id: Optional[str] = None) -> dict:
+    async def save_chat_message(self, user_id: str, message: str, response: str, session_id: str) -> dict:
         try:
-            # If no session_id provided, create a new session
-            if not session_id:
-                session = await self.create_chat_session(user_id)
-                session_id = session['id']
-            
             current_time = datetime.utcnow().isoformat()
             
-            # Save user message (message must not be NULL as per schema)
+            # Save user message
             user_msg = self.supabase.table('user_chat_history').insert({
                 'user_id': user_id,
                 'session_id': session_id,
-                'message': message,  # Required field
-                'chat_type': 'text',
+                'message': message,
+                'chat_type': 'user',
                 'TIMESTAMP': current_time,
                 'last_updated': current_time
             }).execute()
 
-            # Save bot response (bot's message is the response)
+            # Save bot response
             bot_msg = self.supabase.table('user_chat_history').insert({
                 'user_id': user_id,
                 'session_id': session_id,
-                'message': response,  # Required field
+                'message': response,
                 'chat_type': 'bot',
                 'TIMESTAMP': current_time,
                 'last_updated': current_time
@@ -98,7 +89,10 @@ class Database:
                 .eq('id', session_id)\
                 .execute()
 
-            return {'user_message': user_msg.data[0], 'bot_message': bot_msg.data[0]}
+            return {
+                'user_message': user_msg.data[0],
+                'bot_message': bot_msg.data[0]
+            }
         except Exception as e:
             if 'violates check constraint' in str(e):
                 raise HTTPException(status_code=400, detail="Message cannot be empty")
