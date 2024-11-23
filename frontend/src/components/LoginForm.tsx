@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -12,6 +12,7 @@ const LoginForm: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const validateForm = (): boolean => {
     if (!email || !password) {
@@ -38,7 +39,7 @@ const LoginForm: React.FC = () => {
       const result = await login(email, password);
       if (result.success) {
         // Get the redirect path from location state, default to '/app'
-        const { state } = location;
+        const state = location.state as { from: string } | null;
         const from = state?.from || '/app';
         navigate(from, { replace: true });
       } else {

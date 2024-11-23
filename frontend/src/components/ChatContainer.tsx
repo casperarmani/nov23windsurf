@@ -60,10 +60,10 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
 
       const data = await response.json();
       
-      const updatedMessages = [
+      const updatedMessages: Message[] = [
         ...chatMessages,
-        { type: 'user', content: message.trim() },
-        { type: 'bot', content: data.response }
+        { type: 'user' as const, content: message.trim() },
+        { type: 'bot' as const, content: data.response }
       ];
       
       setChatMessages(updatedMessages);

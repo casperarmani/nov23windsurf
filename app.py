@@ -96,9 +96,23 @@ app.add_middleware(
     allowed_hosts=["*"]
 )
 
-# Mount static files and templates
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Mount static files from React build
 app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
+app.mount("/", StaticFiles(directory="static/react", html=True), name="spa")
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: HTTPException):
+    """Handle 404 errors by serving the React app"""
+    if any(request.url.path.startswith(f"/{path}") for path in [
+        "api", "login", "logout", "auth_status", 
+        "chat_history", "video_analysis_history", "send_message"
+    ]):
+        raise exc
+    try:
+        return FileResponse("static/react/index.html")
+    except Exception as e:
+        logger.error(f"Error serving SPA: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error serving application")
 
 chatbot = Chatbot()
 
