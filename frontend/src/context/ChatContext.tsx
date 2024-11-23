@@ -24,7 +24,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/chat_sessions', {
+      const response = await fetch('/api/chat_sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -67,7 +67,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setMessages(prev => [...prev, newMessage]);
       }
 
-      const response = await fetch('/send_message', {
+      const response = await fetch('/api/send_message', {
         method: 'POST',
         body: formData,
         credentials: 'include',

@@ -1,0 +1,199 @@
+Let me check the FastAPI setup and static file serving. First, let's look at the bottom of app.py:
+
+Analyzed
+
+app.py
+AHA! I see the issue. The problem is that the API routes are being hidden by the static file serving. Let's fix this by:
+
+Moving all API routes under /api prefix
+Updating the frontend to use the new API routes
+Fixing the CORS configuration
+Here's what we need to do:
+
+First, let's fix the backend routes:
+Edit:
+app.py
++41
+-107
+ 560
+Preview
+Apply
+{{ ... }}
+# Create API router
+api_router = APIRouter(prefix="/api")
+
+@api_router.post("/chat_sessions")
+async def create_chat_session(
+    session: ChatSession,
+    user: dict = Depends(get_current_user)
+) -> JSONResponse:
+    """Create a new chat session for the user."""
+    try:
+        logger.info(f"Creating chat session for user {user['id']} with title {session.title}")
+        result = await db.create_chat_session(user['id'], session.title)
+        logger.info(f"Created chat session: {result}")
+        return JSONResponse(content=result)
+    except Exception as e:
+        logger.error(f"Error creating chat session: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/chat_history")
+async def get_chat_history(
+    session_id: Optional[str] = None,
+    user: dict = Depends(get_current_user)
+) -> JSONResponse:
+    """Get chat history for a specific session or all sessions."""
+    try:
+        logger.info(f"Getting chat history for user {user['id']}, session {session_id}")
+        messages = await db.get_chat_history(user['id'], session_id)
+        logger.info(f"Found {len(messages)} messages")
+        return JSONResponse(content={"history": messages})
+    except Exception as e:
+        logger.error(f"Error getting chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/send_message")
+async def send_message(
+    request: Request,
+    message: str = Form(...),
+    session_id: Optional[str] = None,
+    videos: Optional[List[UploadFile]] = File(None),
+    user: dict = Depends(get_current_user)
+) -> JSONResponse:
+    """Send a message and optionally process videos in a chat session."""
+    try:
+        logger.info(f"Sending message for user {user['id']}, session {session_id}")
+        # ... rest of the function remains the same ...
+{{ ... }}
+
+# Include API router
+app.include_router(api_router)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static files AFTER all API routes
+app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
+app.mount("/", StaticFiles(directory="static/react", html=True), name="spa")
+{{ ... }}
+Now let's update the frontend to use the new API routes:
+Edit:
+App.tsx
++11
+-23
+ 117
+Preview
+Apply
+{{ ... }}
+  const fetchHistories = async () => {
+    try {
+      const response = await fetch(`/api/chat_history${currentChatId ? `?session_id=${currentChatId}` : ''}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch chat history');
+      }
+
+      const data = await response.json();
+      setChatHistory(data.history || []);
+    } catch (error) {
+      console.error('Error fetching histories:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred while fetching data');
+    }
+  };
+
+  const handleNewChat = async () => {
+    try {
+      const response = await fetch('/api/chat_sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: null,
+          title: `New Chat ${chats.length + 1}`
+        }),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create chat session');
+      }
+
+      const newSession = await response.json();
+      const newChat: Chat = {
+        id: newSession.id,
+        title: newSession.title,
+        messages: [],
+        timestamp: newSession.created_at || new Date().toISOString()
+      };
+      
+      setChats([newChat, ...chats]);
+      setCurrentChatId(newChat.id);
+      await fetchHistories();
+    } catch (error) {
+      console.error('Error creating chat session:', error);
+      setError(error instanceof Error ? error.message : 'Failed to create chat session');
+    }
+  };
+{{ ... }}
+Update ChatContext to use the new API routes:
+Edit:
+ChatContext.tsx
++20
+-19
+ 103
+Preview
+Apply
+{{ ... }}
+  const sendMessage = async (formData: FormData) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/send_message', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      const data = await response.json();
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        content: formData.get('message') as string,
+        type: 'user',
+        timestamp: new Date().toISOString()
+      };
+      
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: data.response,
+        type: 'bot',
+        timestamp: new Date().toISOString()
+      };
+
+      setMessages(prev => [...prev, userMessage, botMessage]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setError(error instanceof Error ? error.message : 'Failed to send message');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+{{ ... }}
+The issue was that the static file serving was catching all routes before they could reach the API endpoints. By:
+
+Moving all API routes under /api prefix
+Updating frontend to use the new API routes
+Fixing CORS configuration
+Mounting static files AFTER API routes
+This should fix the interaction between frontend and backend. The key was that we needed to prefix all API routes with /api to prevent them from being caught by the static file serving middleware.

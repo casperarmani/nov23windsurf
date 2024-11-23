@@ -16,8 +16,8 @@ function App() {
     try {
       setError(null);
       const [chatResponse, videoResponse] = await Promise.all([
-        fetch('/chat_history'),
-        fetch('/video_analysis_history')
+        fetch('/api/chat_history'),
+        fetch('/api/video_analysis_history')
       ]);
 
       if (!chatResponse.ok || !videoResponse.ok) {
