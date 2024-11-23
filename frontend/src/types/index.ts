@@ -31,6 +31,7 @@ export interface VideoHistory {
 }
 
 export interface ApiResponse<T> {
+  history?: T;
   data?: T;
   error?: string;
 }

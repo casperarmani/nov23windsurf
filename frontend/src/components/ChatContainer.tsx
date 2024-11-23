@@ -97,7 +97,7 @@ function ChatContainer({ onCreateSession }: ChatContainerProps) {
       
       <ScrollArea className="flex-grow px-6">
         <div className="space-y-6">
-          {messages.map((msg, index) => (
+          {messages.map((msg: Message, index: number) => (
             <ChatMessage key={index} message={msg} />
           ))}
         </div>

@@ -24,19 +24,19 @@ function App() {
         throw new Error('Failed to fetch history data');
       }
 
-      const chatData: ApiResponse<ChatHistory[]> = await chatResponse.json();
-      const videoData: ApiResponse<VideoHistory[]> = await videoResponse.json();
+      const chatData = await chatResponse.json();
+      const videoData = await videoResponse.json();
       
-      if (!chatData?.data || !Array.isArray(chatData.data)) {
+      if (!chatData?.history || !Array.isArray(chatData.history)) {
         throw new Error('Invalid chat history data format');
       }
 
-      if (!videoData?.data || !Array.isArray(videoData.data)) {
+      if (!videoData?.history || !Array.isArray(videoData.history)) {
         throw new Error('Invalid video history data format');
       }
 
-      setChatHistory(chatData.data);
-      setVideoHistory(videoData.data);
+      setChatHistory(chatData.history);
+      setVideoHistory(videoData.history);
     } catch (error) {
       console.error('Error fetching histories:', error);
       setError(error instanceof Error ? error.message : 'An error occurred while fetching data');

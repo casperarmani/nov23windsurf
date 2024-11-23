@@ -1,6 +1,12 @@
 import React from 'react';
 
-export function ChatHeader() {
+import { ChatSession } from '../../types';
+
+interface ChatHeaderProps {
+  session: ChatSession | null;
+}
+
+export function ChatHeader({ session }: ChatHeaderProps) {
   return (
     <div className="flex justify-between items-center px-6 py-4 border-b border-white/10">
       <div className="flex space-x-2">
