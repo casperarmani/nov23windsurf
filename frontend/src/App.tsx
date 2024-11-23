@@ -47,47 +47,34 @@ function App() {
       const chatData = await chatResponse.json();
       const chatHistory = Array.isArray(chatData) ? chatData : [];
       
-      // Group messages by session_id maintaining chronological order
+      // Update the grouping logic to respect session_id properly
       const groupedBySession = chatHistory.reduce((acc: { [key: string]: ChatHistory[] }, msg) => {
-        const sessionId = msg.session_id || 'default';
-        if (!acc[sessionId]) {
-          acc[sessionId] = [];
+        // Ensure we use the actual session_id, not creating a default one
+        if (!msg.session_id) return acc;
+        
+        if (!acc[msg.session_id]) {
+          acc[msg.session_id] = [];
         }
-        // Maintain chronological order within each session
-        acc[sessionId].push(msg);
+        acc[msg.session_id].push(msg);
         return acc;
       }, {});
 
-      // Sort messages within each session by timestamp
-      Object.keys(groupedBySession).forEach(sessionId => {
-        groupedBySession[sessionId].sort((a, b) => 
-          new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
-        );
-      });
+      // Update cache with complete session data
+      setSessionCache(groupedBySession);
 
-      // Update cache with all sessions
-      setSessionCache(prev => ({
-        ...prev,
-        ...groupedBySession
+      // Convert to Chat objects maintaining complete message history
+      const convertedChats = Object.entries(groupedBySession).map(([sessionId, messages]) => ({
+        id: sessionId,
+        title: messages[0]?.message?.slice(0, 30) || 'Untitled Chat',
+        messages: messages.map(msg => ({
+          type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'user' | 'bot' | 'error',
+          content: msg.message,
+          timestamp: msg.TIMESTAMP,
+          sessionId: sessionId
+        })),
+        timestamp: messages[0]?.TIMESTAMP,
+        session_id: sessionId
       }));
-
-      // Convert to Chat objects
-      const convertedChats = Object.entries(groupedBySession).map(([sessionId, messages]) => {
-        const sortedMessages = [...messages].sort((a, b) => 
-          new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
-        );
-        
-        return {
-          id: sessionId,
-          title: sortedMessages[0]?.message?.slice(0, 30) || 'Untitled Chat',
-          messages: sortedMessages.map(msg => ({
-            type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'user' | 'bot' | 'error',
-            content: msg.message || ''
-          })),
-          timestamp: sortedMessages[0]?.TIMESTAMP,
-          session_id: sessionId
-        };
-      });
 
       console.log('Converted Chats:', convertedChats);
 
