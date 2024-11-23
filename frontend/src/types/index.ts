@@ -1,13 +1,24 @@
 export interface Message {
   type: 'user' | 'bot' | 'error';
   content: string;
+  timestamp?: string;
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ChatHistory {
-  TIMESTAMP: string;
-  chat_type: 'user' | 'bot';
+  id: string;
+  user_id: string;
+  session_id: string;
   message: string;
-  id?: string;
+  chat_type: 'user' | 'bot';
+  TIMESTAMP: string;
 }
 
 export interface VideoHistory {
@@ -20,13 +31,11 @@ export interface VideoHistory {
 }
 
 export interface ApiResponse<T> {
-  history: T[];
+  data?: T;
   error?: string;
 }
 
-export interface Chat {
-  id: string;
-  title: string;
-  messages: Message[];
-  timestamp: string;
+export interface ChatSessionResponse {
+  sessions: ChatSession[];
+  error?: string;
 }
