@@ -45,7 +45,7 @@ function App() {
 
   const handleNewChat = async () => {
     try {
-      const response = await fetch('/chat_sessions', {
+      const response = await fetch('/api/chat_sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +70,6 @@ function App() {
       
       setChats([newChat, ...chats]);
       setCurrentChatId(newChat.id);
-      await fetchHistories(); // Refresh chat history
     } catch (error) {
       console.error('Error creating chat session:', error);
       setError(error instanceof Error ? error.message : 'Failed to create chat session');
