@@ -309,16 +309,22 @@ async def get_chat_history(
             logger.info(f"Returning cached chat history for user {user['id']}")
             return JSONResponse(content={"history": cached_history})
         
-        history = await db.get_chat_history(user['id'], session_id)
-        if history:
-            redis_manager.set_cache(cache_key, history)
-        return JSONResponse(content={"history": history or []})
+        try:
+            history = await db.get_chat_history(user['id'], session_id)
+            if history:
+                redis_manager.set_cache(cache_key, history)
+            return JSONResponse(content={"history": history or []})
+        except HTTPException as e:
+            logger.error(f"Database error in chat history: {str(e)}")
+            return JSONResponse(
+                content={"history": [], "error": str(e.detail)},
+                status_code=e.status_code
+            )
     except Exception as e:
         logger.error(f"Error fetching chat history: {str(e)}")
-        # Return empty history instead of 500 error
         return JSONResponse(
-            content={"history": [], "error": "Failed to fetch chat history"},
-            status_code=200
+            content={"history": [], "error": "Internal server error"},
+            status_code=500
         )
 
 # Setup session cleanup background task

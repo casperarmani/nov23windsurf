@@ -19,29 +19,39 @@ function App() {
         fetch('/video_analysis_history')
       ]);
 
-      if (!chatResponse.ok || !videoResponse.ok) {
-        throw new Error('Failed to fetch history data');
-      }
-
-      const chatData: ApiResponse<ChatHistory> = await chatResponse.json();
-      const videoData: ApiResponse<VideoHistory> = await videoResponse.json();
+      const chatData = await chatResponse.json();
+      const videoData = await videoResponse.json();
       
       console.log('Chat History Response:', chatData);
       console.log('Video History Response:', videoData);
       
-      if (!chatData?.history || !Array.isArray(chatData.history)) {
-        throw new Error('Invalid chat history data format');
+      // Check for error in chat history response
+      if (!chatResponse.ok) {
+        console.error('Chat history error:', chatData.error);
+        setError(chatData.error || 'Failed to fetch chat history');
+        setChatHistory([]);
+      } else {
+        if (!chatData?.history || !Array.isArray(chatData.history)) {
+          throw new Error('Invalid chat history data format');
+        }
+        setChatHistory(chatData.history);
       }
 
-      if (!videoData?.history || !Array.isArray(videoData.history)) {
-        throw new Error('Invalid video history data format');
+      // Check for error in video history response
+      if (!videoResponse.ok) {
+        console.error('Video history error:', videoData.error);
+        setVideoHistory([]);
+      } else {
+        if (!videoData?.history || !Array.isArray(videoData.history)) {
+          throw new Error('Invalid video history data format');
+        }
+        setVideoHistory(videoData.history);
       }
-
-      setChatHistory(chatData.history);
-      setVideoHistory(videoData.history);
     } catch (error) {
       console.error('Error fetching histories:', error);
       setError(error instanceof Error ? error.message : 'An error occurred while fetching data');
+      setChatHistory([]);
+      setVideoHistory([]);
     }
   };
 
