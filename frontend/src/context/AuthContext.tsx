@@ -27,32 +27,43 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const checkAuthStatus = async () => {
-    try {
-      const response = await fetch('/auth_status', {
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        throw new Error('Auth status check failed');
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // 1 second
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        setLoading(true);
+        const response = await fetch('/auth_status', {
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          throw new Error('Auth status check failed');
+        }
+        
+        const data = await response.json();
+        
+        if (data.authenticated && data.user) {
+          setUser(data.user);
+          setLoading(false);
+          return;
+        } else {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+      } catch (error) {
+        console.error(`Auth status check failed (Attempt ${attempt}):`, error);
+        
+        if (attempt === MAX_RETRIES) {
+          setUser(null);
+          setLoading(false);
+          break;
+        }
+        
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
       }
-      
-      const data = await response.json();
-      
-      if (data.authenticated && data.user) {
-        setUser(data.user);
-      } else {
-        setUser(null);
-      }
-    } catch (error) {
-      console.error('Auth status check failed:', error);
-      setUser(null);
-      // Optionally trigger a retry with exponential backoff
-      // if the error was due to network issues
-      if (error instanceof TypeError) {
-        setTimeout(checkAuthStatus, 5000);
-      }
-    } finally {
-      setLoading(false);
     }
   };
 

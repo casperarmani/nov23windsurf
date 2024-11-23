@@ -6,6 +6,7 @@ import { ChatWelcome } from './chat/ChatWelcome';
 import { ChatMessage } from './chat/ChatMessage';
 import { ChatInput } from './chat/ChatInput';
 import { Upload, X } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface ChatContainerProps {
   chatId?: string | null;
@@ -22,6 +23,27 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth() || {};
+
+  const fetchChatHistory = async () => {
+    try {
+      const response = await fetch('/chat_history');
+      if (!response.ok) {
+        throw new Error('Failed to fetch chat history');
+      }
+      const data = await response.json();
+      setChatMessages(data.history || []);
+    } catch (error) {
+      console.error('Failed to fetch chat history:', error);
+      setError('Could not load chat history. Please try again later.');
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchChatHistory();
+    }
+  }, [user]);
 
   useEffect(() => {
     if (chatContainerRef.current) {

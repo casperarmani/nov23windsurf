@@ -2,6 +2,9 @@ from datetime import datetime
 import uuid
 from typing import List, Optional
 from fastapi import HTTPException
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Database:
     def __init__(self, supabase_client):
@@ -40,6 +43,11 @@ class Database:
 
     async def get_chat_history(self, user_id: str, session_id: Optional[str] = None, limit: int = 50) -> List[dict]:
         try:
+            # Validate user_id
+            if not user_id:
+                logger.warning("Attempted to retrieve chat history with empty user_id")
+                return []
+
             # Build query with exact column names and proper timestamp field
             query = self.supabase.table('user_chat_history')\
                 .select('id,user_id,session_id,message,chat_type,"TIMESTAMP",last_updated')\
@@ -54,12 +62,29 @@ class Database:
             response = query.execute()
             
             if not response.data:
+                logger.info(f"No chat history found for user {user_id}")
                 return []
                 
-            return response.data
+            # Optional: Transform data if needed
+            transformed_history = []
+            for msg in response.data:
+                transformed_msg = {
+                    'id': msg.get('id'),
+                    'user_id': msg.get('user_id'),
+                    'session_id': msg.get('session_id'),
+                    'message': msg.get('message', ''),
+                    'chat_type': msg.get('chat_type', 'text'),
+                    'timestamp': msg.get('TIMESTAMP'),
+                    'last_updated': msg.get('last_updated')
+                }
+                transformed_history.append(transformed_msg)
+            
+            return transformed_history
+        
         except Exception as e:
-            logger.error(f"Database error in get_chat_history: {str(e)}")
+            logger.error(f"Comprehensive database error in get_chat_history: {str(e)}")
             if 'violates foreign key constraint' in str(e):
+                logger.warning(f"Invalid user ID: {user_id}")
                 raise HTTPException(status_code=400, detail="Invalid user ID")
             raise HTTPException(status_code=500, detail=f"Failed to get chat history: {str(e)}")
 

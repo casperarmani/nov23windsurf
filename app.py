@@ -479,24 +479,45 @@ async def auth_status(request: Request):
 async def serve_react_app(request: Request):
     return FileResponse("static/react/index.html")
 
-
-
 @app.get("/chat_history")
 async def get_chat_history_endpoint(request: Request):
-    user = await get_current_user(request)
-    if not user:
-        return JSONResponse(content={"history": []})
-    
-    cache_key = f"chat_history:{user['id']}"
-    cached_history = redis_manager.get_cache(cache_key)
-    
-    if cached_history:
-        logger.info(f"Returning cached chat history for user {user['id']}")
-        return JSONResponse(content={"history": cached_history})
+    try:
+        user = await get_current_user(request)
+        if not user:
+            return JSONResponse(
+                status_code=401, 
+                content={"error": "Unauthorized", "history": []}
+            )
         
-    history = await get_chat_history(uuid.UUID(user['id']))
-    redis_manager.set_cache(cache_key, history)
-    return JSONResponse(content={"history": history})
+        cache_key = f"chat_history:{user['id']}"
+        cached_history = redis_manager.get_cache(cache_key)
+        
+        if cached_history:
+            logger.info(f"Returning cached chat history for user {user['id']}")
+            return JSONResponse(content={"history": cached_history})
+        
+        # Fetch chat history from database
+        try:
+            history = await get_chat_history(uuid.UUID(user['id']))
+        except Exception as db_error:
+            logger.error(f"Database error fetching chat history: {str(db_error)}")
+            return JSONResponse(
+                status_code=500, 
+                content={"error": "Failed to retrieve chat history", "history": []}
+            )
+        
+        # Cache the history for future requests
+        if history:
+            redis_manager.set_cache(cache_key, history, expire_seconds=3600)  # 1 hour cache
+        
+        return JSONResponse(content={"history": history or []})
+    
+    except Exception as e:
+        logger.error(f"Unexpected error in chat history endpoint: {str(e)}")
+        return JSONResponse(
+            status_code=500, 
+            content={"error": "Internal server error", "history": []}
+        )
 
 @app.get("/video_analysis_history")
 async def get_video_analysis_history_endpoint(request: Request):
