@@ -30,37 +30,23 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
   }, [chatMessages]);
 
   useEffect(() => {
-    console.log('Chat Messages State:', chatMessages);
-  }, [chatMessages]);
-
-  useEffect(() => {
-    if (initialMessages) {
-      setChatMessages(initialMessages);
-    } else {
-      setChatMessages([]);
-    }
-  }, [initialMessages, chatId]);
+    setChatMessages(initialMessages);
+  }, [initialMessages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim() || !chatId || isLoading) return;
+    if ((!message.trim() && files.length === 0) || isLoading) return;
 
     setIsLoading(true);
     setError(null);
 
-    const newMessage = {
-      type: 'user' as const,
-      content: message.trim()
-    };
-
-    // Update local state immediately for better UX
-    setChatMessages(prev => [...prev, newMessage]);
-    setMessage('');
-
     try {
       const formData = new FormData();
-      formData.append('message', newMessage.content);
-      formData.append('session_id', chatId);
+      formData.append('message', message.trim());
+      
+      files.forEach((file) => {
+        formData.append('videos', file);
+      });
 
       const response = await fetch('/send_message', {
         method: 'POST',
@@ -69,27 +55,32 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
       });
 
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
+      const data = await response.json();
       
-      // Update messages with bot response
-      const botMessage = {
-        type: 'bot' as const,
-        content: result.response
-      };
+      const updatedMessages: Message[] = [
+        ...chatMessages,
+        { type: 'user' as const, content: message.trim() },
+        { type: 'bot' as const, content: data.response }
+      ];
       
-      setChatMessages(prev => [...prev, botMessage]);
-      
-      if (onMessageSent) {
-        onMessageSent([...chatMessages, newMessage, botMessage], chatId);
+      setChatMessages(updatedMessages);
+      if (chatId && onMessageSent) {
+        onMessageSent(updatedMessages, chatId);
       }
-    } catch (error) {
-      console.error('Error:', error);
+      
+      setMessage('');
+      setFiles([]);
+    } catch (err) {
+      console.error('Error:', err);
       setError('Failed to send message. Please try again.');
-      // Remove the user message on error
-      setChatMessages(prev => prev.slice(0, -1));
+      setChatMessages(prev => [
+        ...prev,
+        { type: 'user', content: message.trim() },
+        { type: 'error', content: 'Failed to send message. Please try again.' }
+      ]);
     } finally {
       setIsLoading(false);
     }

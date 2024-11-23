@@ -11,160 +11,68 @@ function App() {
   const [chats, setChats] = React.useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = React.useState<string | null>(null);
 
-  const fetchChatSessions = async () => {
-    try {
-      const response = await fetch('/chat_sessions');
-      const data = await response.json();
-      
-      if (!response.ok) {
-        console.error('Failed to fetch chat sessions:', data.error);
-        return;
-      }
-
-      if (data.sessions && Array.isArray(data.sessions)) {
-        const formattedChats = data.sessions.map((session: any) => ({
-          id: session.id,
-          title: session.title || 'New Chat',
-          messages: [],
-          timestamp: session.created_at
-        }));
-        setChats(formattedChats);
-        
-        // Set current chat if none selected
-        if (!currentChatId && formattedChats.length > 0) {
-          setCurrentChatId(formattedChats[0].id);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching chat sessions:', error);
-    }
-  };
-
   const fetchHistories = async () => {
     try {
       setError(null);
       const [chatResponse, videoResponse] = await Promise.all([
-        fetch('/chat_history' + (currentChatId ? `?session_id=${currentChatId}` : '')),
+        fetch('/chat_history'),
         fetch('/video_analysis_history')
       ]);
 
-      const chatData = await chatResponse.json();
-      const videoData = await videoResponse.json();
-      
-      console.log('Chat History Response:', chatData);
-      console.log('Video History Response:', videoData);
-      
-      // Check for error in chat history response
-      if (!chatResponse.ok) {
-        console.error('Chat history error:', chatData.error);
-        setError(chatData.error || 'Failed to fetch chat history');
-        setChatHistory([]);
-      } else {
-        if (!chatData?.history || !Array.isArray(chatData.history)) {
-          throw new Error('Invalid chat history data format');
-        }
-        setChatHistory(chatData.history);
-        
-        // Update current chat messages if we have a selected chat
-        if (currentChatId) {
-          setChats(prevChats => 
-            prevChats.map(chat => 
-              chat.id === currentChatId
-                ? { 
-                    ...chat, 
-                    messages: chatData.history.map((msg: any) => ({
-                      type: msg.chat_type,
-                      content: msg.message
-                    }))
-                  }
-                : chat
-            )
-          );
-        }
+      if (!chatResponse.ok || !videoResponse.ok) {
+        throw new Error('Failed to fetch history data');
       }
 
-      // Check for error in video history response
-      if (!videoResponse.ok) {
-        console.error('Video history error:', videoData.error);
-        setVideoHistory([]);
-      } else {
-        if (!videoData?.history || !Array.isArray(videoData.history)) {
-          throw new Error('Invalid video history data format');
-        }
-        setVideoHistory(videoData.history);
+      const chatData: ApiResponse<ChatHistory> = await chatResponse.json();
+      const videoData: ApiResponse<VideoHistory> = await videoResponse.json();
+      
+      if (!chatData?.history || !Array.isArray(chatData.history)) {
+        throw new Error('Invalid chat history data format');
       }
+
+      if (!videoData?.history || !Array.isArray(videoData.history)) {
+        throw new Error('Invalid video history data format');
+      }
+
+      setChatHistory(chatData.history);
+      setVideoHistory(videoData.history);
     } catch (error) {
       console.error('Error fetching histories:', error);
       setError(error instanceof Error ? error.message : 'An error occurred while fetching data');
-      setChatHistory([]);
-      setVideoHistory([]);
     }
   };
 
-  const handleNewChat = async () => {
-    try {
-      const formData = new FormData();
-      formData.append('title', `New Chat ${chats.length + 1}`);
-
-      const response = await fetch('/create_chat_session', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create new chat');
-      }
-
-      const newChat = await response.json();
-      setChats(prevChats => [{
-        id: newChat.id,
-        title: newChat.title,
-        messages: [],
-        timestamp: newChat.created_at
-      }, ...prevChats]);
-      setCurrentChatId(newChat.id);
-    } catch (error) {
-      console.error('Error creating new chat:', error);
-      setError('Failed to create new chat');
-    }
+  const handleNewChat = () => {
+    const newChat: Chat = {
+      id: Date.now().toString(),
+      title: `New Chat ${chats.length + 1}`,
+      messages: [],
+      timestamp: new Date().toISOString()
+    };
+    setChats([newChat, ...chats]);
+    setCurrentChatId(newChat.id);
   };
 
   const handleSelectChat = (chatId: string) => {
     setCurrentChatId(chatId);
   };
 
-  const handleMessageSent = async (messages: Message[], chatId: string) => {
-    try {
-      // Update local state immediately for better UX
-      setChats(prevChats => 
-        prevChats.map(chat => 
-          chat.id === chatId 
-            ? { ...chat, messages }
-            : chat
-        )
-      );
-
-      // No need to fetch histories here since the ChatContainer component 
-      // already handles the API call and response
-    } catch (error) {
-      console.error('Error updating chat:', error);
-      setError('Failed to update chat');
-    }
+  const handleMessageSent = (messages: Message[], chatId: string) => {
+    setChats(prevChats => 
+      prevChats.map(chat => 
+        chat.id === chatId 
+          ? { ...chat, messages, title: messages[0]?.content.slice(0, 30) || chat.title }
+          : chat
+      )
+    );
+    fetchHistories();
   };
 
-  // Load chat sessions on mount
-  React.useEffect(() => {
-    fetchChatSessions();
-  }, []);
-
-  // Fetch histories when current chat changes
-  React.useEffect(() => {
-    if (currentChatId) {
-      fetchHistories();
-    }
-  }, [currentChatId]);
-
   const currentChat = chats.find(chat => chat.id === currentChatId) || null;
+
+  React.useEffect(() => {
+    fetchHistories();
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-300">
