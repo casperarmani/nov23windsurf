@@ -104,11 +104,45 @@ function App() {
     setCurrentChatId(newChat.id);
   };
 
-  const handleSelectChat = (chatId: string) => {
-    setCurrentChatId(chatId);
-    const chat = chats.find(c => c.id === chatId);
-    if (chat?.session_id) {
-      fetchHistories(chat.session_id);
+  const handleSelectChat = async (chatId: string) => {
+    try {
+      setError(null);
+      const chat = chats.find(c => c.id === chatId);
+      
+      if (chat?.session_id) {
+        // Check if we have cached messages for this session
+        const cachedMessages = sessionCache[chat.session_id];
+        
+        // Set current chat ID immediately for UI update
+        setCurrentChatId(chatId);
+        
+        if (cachedMessages) {
+          // Use cached messages if available
+          setChatHistory(cachedMessages);
+        } else {
+          // Fetch new messages if not in cache
+          const response = await fetch(`/chat_history?session_id=${chat.session_id}`);
+          if (!response.ok) {
+            throw new Error('Failed to fetch chat history');
+          }
+          
+          const messages = await response.json();
+          if (Array.isArray(messages)) {
+            // Update cache with new messages
+            setSessionCache(prev => ({
+              ...prev,
+              [chat.session_id]: messages
+            }));
+            setChatHistory(messages);
+          }
+        }
+      } else {
+        setCurrentChatId(chatId);
+        setChatHistory([]);
+      }
+    } catch (error) {
+      console.error('Error switching chats:', error);
+      setError('Failed to load chat messages. Please try again.');
     }
   };
 

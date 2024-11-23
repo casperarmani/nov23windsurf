@@ -32,6 +32,7 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
         return;
       }
       
+      setIsLoading(true);
       const response = await fetch(`/chat_history?session_id=${chatId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch chat history');
@@ -41,19 +42,26 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
         throw new Error('Invalid chat history format');
       }
       
+      // Sort messages by timestamp in ascending order
       const sortedMessages = [...data].sort((a, b) => 
         new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
       );
       
+      // Transform messages maintaining all necessary information
       const transformedMessages: Message[] = sortedMessages.map((msg) => ({
         type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'bot' | 'user' | 'error',
-        content: msg.message
+        content: msg.message,
+        timestamp: msg.TIMESTAMP,
+        sessionId: msg.session_id
       }));
       
       setChatMessages(transformedMessages);
+      setError(null);
     } catch (error) {
       console.error('Failed to fetch chat history:', error);
       setError('Could not load chat history. Please try again later.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -69,9 +77,19 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
     }
   }, [chatMessages]);
 
+  // Initialize chat messages only once when the component mounts
   useEffect(() => {
-    setChatMessages(initialMessages);
-  }, [initialMessages]);
+    if (initialMessages?.length > 0) {
+      setChatMessages(initialMessages);
+    }
+  }, []);
+
+  // Update messages when chatId changes
+  useEffect(() => {
+    if (chatId) {
+      fetchChatHistory();
+    }
+  }, [chatId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
