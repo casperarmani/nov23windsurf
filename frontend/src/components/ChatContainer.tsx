@@ -42,21 +42,24 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
         throw new Error('Invalid chat history format');
       }
       
-      // Sort messages by timestamp in ascending order
-      const sortedMessages = [...data].sort((a, b) => 
-        new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
-      );
-      
-      // Transform messages maintaining all necessary information
-      const transformedMessages: Message[] = sortedMessages.map((msg) => ({
-        type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'bot' | 'user' | 'error',
-        content: msg.message,
-        timestamp: msg.TIMESTAMP,
-        sessionId: msg.session_id
-      }));
-      
-      setChatMessages(transformedMessages);
-      setError(null);
+      // Only update if we're still on the same chat
+      if (chatId === props.chatId) {
+        // Sort messages by timestamp in ascending order
+        const sortedMessages = [...data].sort((a, b) => 
+          new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
+        );
+        
+        // Transform messages maintaining all necessary information
+        const transformedMessages: Message[] = sortedMessages.map((msg) => ({
+          type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'bot' | 'user' | 'error',
+          content: msg.message,
+          timestamp: msg.TIMESTAMP,
+          sessionId: msg.session_id
+        }));
+        
+        setChatMessages(transformedMessages);
+        setError(null);
+      }
     } catch (error) {
       console.error('Failed to fetch chat history:', error);
       setError('Could not load chat history. Please try again later.');
@@ -65,12 +68,16 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
     }
   };
 
-  // Update messages when user or chatId changes
+  // Combined useEffect for chat history management
   useEffect(() => {
     if (user && chatId) {
-      fetchChatHistory();
+      if (initialMessages?.length > 0) {
+        setChatMessages(initialMessages);
+      } else {
+        fetchChatHistory();
+      }
     }
-  }, [user, chatId]);
+  }, [user, chatId, initialMessages]);
 
   // Auto-scroll when messages change
   useEffect(() => {
@@ -78,13 +85,6 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
-
-  // Update messages when initialMessages changes
-  useEffect(() => {
-    if (initialMessages?.length > 0) {
-      setChatMessages(initialMessages);
-    }
-  }, [initialMessages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
