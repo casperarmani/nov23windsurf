@@ -12,11 +12,28 @@ interface ChatContainerProps {
   chatId?: string | null;
   initialMessages?: Message[];
   onMessageSent?: (messages: Message[], chatId: string) => void;
+  sessionCache?: { [key: string]: ChatHistory[] };
 }
 
-function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatContainerProps) {
+function ChatContainer({ 
+  chatId, 
+  initialMessages = [], 
+  onMessageSent,
+  sessionCache = {}
+}: ChatContainerProps) {
   const [message, setMessage] = useState<string>('');
-  const [chatMessages, setChatMessages] = useState<Message[]>(initialMessages);
+  const [chatMessages, setChatMessages] = useState<Message[]>(() => {
+    // Initialize with cached messages if available, otherwise use initialMessages
+    if (chatId && sessionCache[chatId]) {
+      return sessionCache[chatId].map(msg => ({
+        type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'user' | 'bot' | 'error',
+        content: msg.message,
+        timestamp: msg.TIMESTAMP,
+        sessionId: msg.session_id || chatId
+      }));
+    }
+    return initialMessages;
+  });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);

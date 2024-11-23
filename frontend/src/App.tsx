@@ -213,6 +213,7 @@ function App() {
                   chatId={currentChatId}
                   initialMessages={currentChat?.messages || []}
                   onMessageSent={handleMessageSent}
+                  sessionCache={sessionCache}
                 />
               </div>
             </div>
