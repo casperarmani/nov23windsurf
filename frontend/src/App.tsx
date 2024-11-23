@@ -19,48 +19,50 @@ function App() {
         fetch('/video_analysis_history')
       ]);
 
-      console.log('Chat Response Status:', chatResponse.status);
-      console.log('Video Response Status:', videoResponse.status);
+      console.log('Response Status:', {
+        chat: chatResponse.status,
+        video: videoResponse.status
+      });
 
-      // Log full response text before parsing
-      const chatResponseText = await chatResponse.text();
-      console.log('Full Chat Response Text:', chatResponseText);
-
-      // Defensive parsing
-      let chatData: ApiResponse<ChatHistory>;
+      // Handle chat history
+      let chatHistory: ChatHistory[] = [];
       try {
-        chatData = JSON.parse(chatResponseText);
-      } catch (parseError) {
-        console.error('Failed to parse chat response:', parseError);
-        chatData = { history: [], total_count: 0 };
+        const chatData = await chatResponse.json();
+        chatHistory = Array.isArray(chatData) ? chatData : [];
+        console.log('Raw Chat History:', chatHistory);
+      } catch (error) {
+        console.error('Error parsing chat response:', error);
+        setError('Failed to load chat history');
       }
 
-      // Ensure consistent data format with fallbacks
-      const chatHistory = Array.isArray(chatData.history) 
-        ? chatData.history 
-        : (chatData.history || []);
+      // Handle video history
+      let videoHistory: VideoHistory[] = [];
+      try {
+        const videoData = await videoResponse.json();
+        videoHistory = Array.isArray(videoData) ? videoData : [];
+        console.log('Raw Video History:', videoHistory);
+      } catch (error) {
+        console.error('Error parsing video response:', error);
+        setError('Failed to load video history');
+      }
 
-      const videoData: ApiResponse<VideoHistory> = await videoResponse.json();
-      const videoHistory = Array.isArray(videoData.history) 
-        ? videoData.history 
-        : (videoData.history || []);
-
-      console.log('Raw Chat History:', chatHistory);
-
-      // More robust chat history conversion
-      const convertedChats: Chat[] = chatHistory.length > 0 
-        ? chatHistory.map(chatItem => ({
+      // Convert chat history to Chat objects with proper error handling
+      const convertedChats: Chat[] = chatHistory.map(chatItem => {
+        try {
+          return {
             id: chatItem.id || crypto.randomUUID(),
-            title: chatItem.message.length > 30 
-              ? chatItem.message.slice(0, 30) + '...' 
-              : (chatItem.message || 'Untitled Chat'),
+            title: chatItem.message?.slice(0, 30) || 'Untitled Chat',
             messages: [{
-              type: chatItem.chat_type || 'user',
+              type: chatItem.chat_type === 'text' ? 'user' : chatItem.chat_type,
               content: chatItem.message || ''
             }],
-            timestamp: chatItem.TIMESTAMP || new Date().toISOString()
-          }))
-        : [];
+            timestamp: chatItem.TIMESTAMP
+          };
+        } catch (error) {
+          console.error('Error converting chat item:', error, chatItem);
+          return null;
+        }
+      }).filter((chat): chat is Chat => chat !== null);
 
       console.log('Converted Chats:', convertedChats);
 
