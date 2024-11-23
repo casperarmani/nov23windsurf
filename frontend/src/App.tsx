@@ -20,22 +20,13 @@ function App() {
     try {
       setError(null);
       
-      // If sessionId provided and cached, use cache
+      // Use cache if available
       if (sessionId && sessionCache[sessionId]) {
         console.log('Using cached messages for session:', sessionId);
         setChatHistory(sessionCache[sessionId]);
         return;
       }
 
-      // If no sessionId and we have a complete cache, use it
-      if (!sessionId && Object.keys(sessionCache).length > 0) {
-        console.log('Using complete cache');
-        const allMessages = Object.values(sessionCache).flat();
-        setChatHistory(allMessages);
-        return;
-      }
-
-      // Only fetch messages for specific session if provided
       const url = sessionId ? `/chat_history?session_id=${sessionId}` : '/chat_history';
       const chatResponse = await fetch(url);
       
@@ -43,13 +34,15 @@ function App() {
         throw new Error(`Failed to fetch chat history: ${chatResponse.status}`);
       }
 
-      // Process chat history response
       const chatData = await chatResponse.json();
       const chatHistory = Array.isArray(chatData) ? chatData : [];
       
-      // Group messages by session_id
+      // Group messages by their original session_id
       const groupedBySession = chatHistory.reduce((acc: { [key: string]: ChatHistory[] }, msg) => {
-        const sessionId = msg.session_id || 'default';
+        // Use the original session_id from the message
+        const sessionId = msg.session_id;
+        if (!sessionId) return acc; // Skip messages without session_id
+        
         if (!acc[sessionId]) {
           acc[sessionId] = [];
         }
@@ -63,7 +56,7 @@ function App() {
         ...groupedBySession
       }));
 
-      // Convert to Chat objects
+      // Convert to Chat objects maintaining original session structure
       const convertedChats = Object.entries(groupedBySession).map(([sessionId, messages]) => {
         const sortedMessages = [...messages].sort((a, b) => 
           new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
@@ -74,18 +67,22 @@ function App() {
           title: sortedMessages[0]?.message?.slice(0, 30) || 'Untitled Chat',
           messages: sortedMessages.map(msg => ({
             type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'user' | 'bot' | 'error',
-            content: msg.message || ''
+            content: msg.message || '',
+            timestamp: msg.TIMESTAMP,
+            sessionId: sessionId
           })),
           timestamp: sortedMessages[0]?.TIMESTAMP,
           session_id: sessionId
         };
       });
 
-      console.log('Converted Chats:', convertedChats);
+      // Sort chats by timestamp
+      const sortedChats = convertedChats.sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
 
-      // Update states
       setChatHistory(chatHistory);
-      setChats(convertedChats);
+      setChats(sortedChats);
       
     } catch (error) {
       console.error('Error fetching chat history:', error);
