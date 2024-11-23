@@ -12,28 +12,11 @@ interface ChatContainerProps {
   chatId?: string | null;
   initialMessages?: Message[];
   onMessageSent?: (messages: Message[], chatId: string) => void;
-  sessionCache?: { [key: string]: ChatHistory[] };
 }
 
-function ChatContainer({ 
-  chatId, 
-  initialMessages = [], 
-  onMessageSent,
-  sessionCache = {}
-}: ChatContainerProps) {
+function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatContainerProps) {
   const [message, setMessage] = useState<string>('');
-  const [chatMessages, setChatMessages] = useState<Message[]>(() => {
-    // Initialize with cached messages if available, otherwise use initialMessages
-    if (chatId && sessionCache[chatId]) {
-      return sessionCache[chatId].map(msg => ({
-        type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'user' | 'bot' | 'error',
-        content: msg.message,
-        timestamp: msg.TIMESTAMP,
-        sessionId: msg.session_id || chatId
-      }));
-    }
-    return initialMessages;
-  });
+  const [chatMessages, setChatMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -60,7 +43,7 @@ function ChatContainer({
       }
       
       // Only update if we're still on the same chat
-      if (chatId) {
+      if (chatId === props.chatId) {
         // Sort messages by timestamp in ascending order
         const sortedMessages = [...data].sort((a, b) => 
           new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
@@ -68,10 +51,10 @@ function ChatContainer({
         
         // Transform messages maintaining all necessary information
         const transformedMessages: Message[] = sortedMessages.map((msg) => ({
-          type: msg.chat_type === 'user' ? 'user' : 'bot',
-          content: msg.message || '',
+          type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'bot' | 'user' | 'error',
+          content: msg.message,
           timestamp: msg.TIMESTAMP,
-          sessionId: msg.session_id || 'default'
+          sessionId: msg.session_id
         }));
         
         setChatMessages(transformedMessages);
@@ -89,11 +72,7 @@ function ChatContainer({
   useEffect(() => {
     if (user && chatId) {
       if (initialMessages?.length > 0) {
-        // Sort messages by timestamp
-        const sortedMessages = [...initialMessages].sort((a, b) => 
-          new Date(a.timestamp || '').getTime() - new Date(b.timestamp || '').getTime()
-        );
-        setChatMessages(sortedMessages);
+        setChatMessages(initialMessages);
       } else {
         fetchChatHistory();
       }
@@ -117,9 +96,6 @@ function ChatContainer({
     try {
       const formData = new FormData();
       formData.append('message', message.trim());
-      if (chatId) {
-        formData.append('session_id', chatId);
-      }
       
       files.forEach((file) => {
         formData.append('videos', file);

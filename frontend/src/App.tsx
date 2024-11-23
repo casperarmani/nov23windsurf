@@ -20,50 +20,72 @@ function App() {
     try {
       setError(null);
       
-      const url = sessionId ? `/chat_history?session_id=${sessionId}` : '/chat_history';
-      const response = await fetch(url);
-      const chatData = await response.json();
-      
-      // Sort messages by timestamp first
-      const sortedData = [...chatData].sort((a, b) => 
-        new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
-      );
+      // If sessionId provided and cached, use cache
+      if (sessionId && sessionCache[sessionId]) {
+        console.log('Using cached messages for session:', sessionId);
+        setChatHistory(sessionCache[sessionId]);
+        return;
+      }
 
-      // Group by session maintaining order
-      const groupedBySession = sortedData.reduce((acc, msg) => {
-        if (!msg.session_id) return acc;
-        if (!acc[msg.session_id]) {
-          acc[msg.session_id] = [];
+      // If no sessionId and we have a complete cache, use it
+      if (!sessionId && Object.keys(sessionCache).length > 0) {
+        console.log('Using complete cache');
+        const allMessages = Object.values(sessionCache).flat();
+        setChatHistory(allMessages);
+        return;
+      }
+
+      // Only fetch messages for specific session if provided
+      const url = sessionId ? `/chat_history?session_id=${sessionId}` : '/chat_history';
+      const chatResponse = await fetch(url);
+      
+      if (!chatResponse.ok) {
+        throw new Error(`Failed to fetch chat history: ${chatResponse.status}`);
+      }
+
+      // Process chat history response
+      const chatData = await chatResponse.json();
+      const chatHistory = Array.isArray(chatData) ? chatData : [];
+      
+      // Group messages by session_id
+      const groupedBySession = chatHistory.reduce((acc: { [key: string]: ChatHistory[] }, msg) => {
+        const sessionId = msg.session_id || 'default';
+        if (!acc[sessionId]) {
+          acc[sessionId] = [];
         }
-        acc[msg.session_id].push(msg);
+        acc[sessionId].push(msg);
         return acc;
       }, {});
 
-      // Update session cache
-      setSessionCache(groupedBySession);
-
-      // Convert to Chat objects with complete message history
-      const convertedChats = Object.entries(groupedBySession).map(([sessionId, messages]) => ({
-        id: sessionId,
-        title: messages[0]?.message?.slice(0, 30) || 'Untitled Chat',
-        messages: messages.map(msg => ({
-          type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'user' | 'bot' | 'error',
-          content: msg.message,
-          timestamp: msg.TIMESTAMP,
-          sessionId: sessionId
-        })),
-        timestamp: messages[0]?.TIMESTAMP,
-        session_id: sessionId
+      // Update cache with all sessions
+      setSessionCache(prev => ({
+        ...prev,
+        ...groupedBySession
       }));
 
+      // Convert to Chat objects
+      const convertedChats = Object.entries(groupedBySession).map(([sessionId, messages]) => {
+        const sortedMessages = [...messages].sort((a, b) => 
+          new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
+        );
+        
+        return {
+          id: sessionId,
+          title: sortedMessages[0]?.message?.slice(0, 30) || 'Untitled Chat',
+          messages: sortedMessages.map(msg => ({
+            type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'user' | 'bot' | 'error',
+            content: msg.message || ''
+          })),
+          timestamp: sortedMessages[0]?.TIMESTAMP,
+          session_id: sessionId
+        };
+      });
+
+      console.log('Converted Chats:', convertedChats);
+
+      // Update states
+      setChatHistory(chatHistory);
       setChats(convertedChats);
-      
-      // Update chat history for current session
-      if (sessionId) {
-        setChatHistory(groupedBySession[sessionId] || []);
-      } else {
-        setChatHistory(sortedData);
-      }
       
     } catch (error) {
       console.error('Error fetching chat history:', error);
@@ -71,38 +93,15 @@ function App() {
     }
   };
 
-  const handleNewChat = async () => {
-    try {
-      // Create new chat session in backend
-      const response = await fetch('/chat_sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: `New Chat ${chats.length + 1}`
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to create chat session');
-      }
-      
-      const session = await response.json();
-      const newChat: Chat = {
-        id: session.id,
-        title: session.title,
-        messages: [],
-        timestamp: new Date().toISOString(),
-        session_id: session.id
-      };
-      
-      setChats([newChat, ...chats]);
-      setCurrentChatId(newChat.id);
-    } catch (error) {
-      console.error('Error creating new chat:', error);
-      setError('Failed to create new chat');
-    }
+  const handleNewChat = () => {
+    const newChat: Chat = {
+      id: Date.now().toString(),
+      title: `New Chat ${chats.length + 1}`,
+      messages: [],
+      timestamp: new Date().toISOString()
+    };
+    setChats([newChat, ...chats]);
+    setCurrentChatId(newChat.id);
   };
 
   const handleSelectChat = async (chatId: string) => {
@@ -196,7 +195,6 @@ function App() {
                   chatId={currentChatId}
                   initialMessages={currentChat?.messages || []}
                   onMessageSent={handleMessageSent}
-                  sessionCache={sessionCache}
                 />
               </div>
             </div>

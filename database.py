@@ -49,24 +49,17 @@ class Database:
                 logger.warning("Attempted to retrieve chat history with empty user_id")
                 return []
 
-            # Build optimized query with session filtering and ordering
+            # Build comprehensive query
             query = self.supabase.table('user_chat_history')\
-                .select('*')\
+                .select('id,user_id,session_id,message,chat_type,"TIMESTAMP",last_updated')\
                 .eq('user_id', user_id)\
-                .is_('deleted_at', 'null')
-            
-            if session_id:
-                query = query.eq('session_id', session_id)
-                
-            # Fix order syntax - remove asc/desc parameter
-            query = query.order('TIMESTAMP')  # Ensure chronological order
+                .is_('deleted_at', 'null')\
+                .order('TIMESTAMP', desc=True)\
+                .limit(limit)
             
             # Optional session_id filtering
             if session_id:
                 query = query.eq('session_id', session_id)
-                
-            if limit:
-                query = query.limit(limit)
             
             response = query.execute()
             
@@ -74,14 +67,11 @@ class Database:
                 logger.info(f"No chat history found for user {user_id}")
                 return []
                 
-            # Add proper session grouping
-            session_groups = {}
+            # Comprehensive transformation of data
+            transformed_history = []
             for msg in response.data:
                 try:
-                    session_id = msg.get('session_id') or 'default'
-                    if session_id not in session_groups:
-                        session_groups[session_id] = []
-                        
+                    # Ensure all required fields are present with fallback values
                     transformed_msg = {
                         'TIMESTAMP': (
                             msg.get('TIMESTAMP') or 
@@ -92,19 +82,19 @@ class Database:
                         'chat_type': msg.get('chat_type', 'user'),
                         'message': msg.get('message', ''),
                         'id': str(msg.get('id') or uuid.uuid4()),
-                        'session_id': session_id
+                        'session_id': msg.get('session_id')  # Include session_id
                     }
-                    
-                    session_groups[session_id].append(transformed_msg)
-                    
+                    transformed_history.append(transformed_msg)
                 except Exception as transform_error:
                     logger.error(f"Error transforming chat history item: {transform_error}")
             
-            # Flatten grouped messages while maintaining order
-            transformed_history = []
-            for session_msgs in session_groups.values():
-                transformed_history.extend(session_msgs)
+            # Sort transformed history by timestamp
+            transformed_history.sort(
+                key=lambda x: datetime.fromisoformat(x['TIMESTAMP']), 
+                reverse=True
+            )
             
+            # Log transformed data only at debug level
             logger.debug(f"Transformed chat history for user {user_id}: {transformed_history}")
             
             return transformed_history

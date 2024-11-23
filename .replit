@@ -51,7 +51,7 @@ task = "packager.installForAll"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd frontend && npm run dev"
-waitForPort = 5174
+waitForPort = 5173
 
 [[workflows.workflow]]
 name = "React Build"
@@ -81,7 +81,3 @@ externalPort = 3000
 [[ports]]
 localPort = 5173
 externalPort = 5173
-
-[[ports]]
-localPort = 5174
-externalPort = 3001

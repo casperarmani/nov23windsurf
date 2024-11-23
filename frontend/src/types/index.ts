@@ -2,7 +2,7 @@ export interface Message {
   type: 'user' | 'bot' | 'error';
   content: string;
   timestamp?: string;
-  sessionId: string;
+  sessionId?: string;
 }
 
 export interface ChatHistory {
@@ -10,7 +10,6 @@ export interface ChatHistory {
   chat_type: 'user' | 'bot';
   message: string;
   id?: string;
-  session_id?: string;
 }
 
 export interface VideoHistory {
