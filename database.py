@@ -52,7 +52,7 @@ class Database:
                 .select('id,user_id,session_id,message,chat_type,"TIMESTAMP",last_updated')\
                 .eq('user_id', user_id)\
                 .is_('deleted_at', 'null')\
-                .order('TIMESTAMP', asc=True)
+                .order('TIMESTAMP')  # Removed asc=True, by default it's ascending
             
             if session_id:
                 query = query.eq('session_id', session_id)
