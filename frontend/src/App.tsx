@@ -2,7 +2,6 @@ import React from 'react';
 import ChatContainer from './components/ChatContainer';
 import History from './components/History';
 import { Sidebar } from './components/Sidebar';
-import { ChatProvider } from './context/ChatContext';
 import { ChatHistory, VideoHistory, ApiResponse, Chat, Message } from './types';
 
 function App() {
@@ -16,16 +15,16 @@ function App() {
     try {
       setError(null);
       const [chatResponse, videoResponse] = await Promise.all([
-        fetch('/api/chat_history'),
-        fetch('/api/video_analysis_history')
+        fetch('/chat_history'),
+        fetch('/video_analysis_history')
       ]);
 
       if (!chatResponse.ok || !videoResponse.ok) {
         throw new Error('Failed to fetch history data');
       }
 
-      const chatData = await chatResponse.json();
-      const videoData = await videoResponse.json();
+      const chatData: ApiResponse<ChatHistory> = await chatResponse.json();
+      const videoData: ApiResponse<VideoHistory> = await videoResponse.json();
       
       if (!chatData?.history || !Array.isArray(chatData.history)) {
         throw new Error('Invalid chat history data format');
@@ -43,37 +42,15 @@ function App() {
     }
   };
 
-  const handleNewChat = async () => {
-    try {
-      const response = await fetch('/api/chat_sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: `New Chat ${chats.length + 1}`
-        }),
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create chat session');
-      }
-
-      const newSession = await response.json();
-      const newChat: Chat = {
-        id: newSession.id,
-        title: newSession.title,
-        messages: [],
-        timestamp: newSession.created_at
-      };
-      
-      setChats([newChat, ...chats]);
-      setCurrentChatId(newChat.id);
-    } catch (error) {
-      console.error('Error creating chat session:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create chat session');
-    }
+  const handleNewChat = () => {
+    const newChat: Chat = {
+      id: Date.now().toString(),
+      title: `New Chat ${chats.length + 1}`,
+      messages: [],
+      timestamp: new Date().toISOString()
+    };
+    setChats([newChat, ...chats]);
+    setCurrentChatId(newChat.id);
   };
 
   const handleSelectChat = (chatId: string) => {
@@ -98,9 +75,8 @@ function App() {
   }, []);
 
   return (
-    <ChatProvider>
-      <div className="flex h-screen overflow-hidden bg-gray-300">
-        <Sidebar 
+    <div className="flex h-screen overflow-hidden bg-gray-300">
+      <Sidebar 
         className="border-r" 
         chats={chats}
         currentChatId={currentChatId}
@@ -119,11 +95,8 @@ function App() {
               <div className="grid grid-cols-1 gap-8">
                 <ChatContainer 
                   key={currentChatId || 'new'} 
-                  initialMessages={chatHistory.map(ch => ({
-                    type: ch.chat_type as 'user' | 'bot' | 'error',
-                    content: ch.message
-                  }))}
-                  onCreateSession={handleNewChat}
+                  chatId={currentChatId}
+                  initialMessages={currentChat?.messages || []}
                   onMessageSent={handleMessageSent}
                 />
               </div>
@@ -131,8 +104,7 @@ function App() {
           </div>
         </div>
       </main>
-      </div>
-    </ChatProvider>
+    </div>
   );
 }
 
