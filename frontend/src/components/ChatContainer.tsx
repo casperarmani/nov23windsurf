@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Message, ChatSession } from '../types';
 import { ChatHeader } from './chat/ChatHeader';
@@ -9,56 +9,41 @@ import { Upload, X } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 
 interface ChatContainerProps {
-  session?: ChatSession;
+  onCreateSession?: () => void;
 }
 
-function ChatContainer({ session }: ChatContainerProps) {
-  const { currentSession, messages, sendMessage } = useChat();
+function ChatContainer({ onCreateSession }: ChatContainerProps) {
+  const { currentSession, messages, isLoading, sendMessage } = useChat();
   const [message, setMessage] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [chatMessages]);
-
-  useEffect(() => {
-    setChatMessages(initialMessages);
-  }, [initialMessages]);
+  }, [messages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((!message.trim() && files.length === 0) || isLoading) return;
 
-    setIsLoading(true);
-    setError(null);
+    const formData = new FormData();
+    formData.append('message', message.trim());
+    
+    files.forEach((file) => {
+      formData.append('videos', file);
+    });
 
-    try {
-      const formData = new FormData();
-      formData.append('message', message.trim());
-      
-      files.forEach((file) => {
-        formData.append('videos', file);
-      });
-
-      if (currentSession?.id) {
-        formData.append('session_id', currentSession.id);
-      }
-
-      await sendMessage(formData);
-      setMessage('');
-      setFiles([]);
-    } catch (err) {
-      console.error('Error:', err);
-      setError('Failed to send message. Please try again.');
-    } finally {
-      setIsLoading(false);
+    if (currentSession?.id) {
+      formData.append('session_id', currentSession.id);
     }
+
+    await sendMessage(formData);
+    setMessage('');
+    setFiles([]);
   };
 
   const handleDragEnter = (e: React.DragEvent) => {
