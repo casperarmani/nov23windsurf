@@ -96,23 +96,7 @@ app.add_middleware(
     allowed_hosts=["*"]
 )
 
-# Mount static files from React build
-app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
-app.mount("/", StaticFiles(directory="static/react", html=True), name="spa")
-
-@app.exception_handler(404)
-async def not_found_handler(request: Request, exc: HTTPException):
-    """Handle 404 errors by serving the React app"""
-    if any(request.url.path.startswith(f"/{path}") for path in [
-        "api", "login", "logout", "auth_status", 
-        "chat_history", "video_analysis_history", "send_message"
-    ]):
-        raise exc
-    try:
-        return FileResponse("static/react/index.html")
-    except Exception as e:
-        logger.error(f"Error serving SPA: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error serving application")
+# API routes will be defined here first
 
 chatbot = Chatbot()
 
@@ -229,6 +213,7 @@ async def auth_status(request: Request):
     try:
         session_id = request.cookies.get('session_id')
         if not session_id:
+            logger.info("Auth status check: No session ID found in cookies")
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -237,18 +222,10 @@ async def auth_status(request: Request):
                 }
             )
 
-        # Refresh session if it exists
-        if await redis_manager.refresh_session(session_id):
-            user = await get_current_user(request, return_none=True)
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "authenticated": user is not None,
-                    "user": user if user else None,
-                    "session_status": "active"
-                }
-            )
-        else:
+        # First validate session data exists
+        is_valid, session_data = redis_manager.validate_session(session_id)
+        if not is_valid or not session_data:
+            logger.info(f"Auth status check: Invalid or expired session {session_id}")
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content={
@@ -256,13 +233,56 @@ async def auth_status(request: Request):
                     "message": "Session expired or invalid"
                 }
             )
+
+        # Attempt to refresh the session
+        if not await redis_manager.refresh_session(session_id):
+            logger.warning(f"Auth status check: Failed to refresh session {session_id}")
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": False,
+                    "message": "Session refresh failed"
+                }
+            )
+
+        # Get user data with current session
+        try:
+            user = await get_current_user(request, return_none=True)
+            if not user:
+                logger.warning(f"Auth status check: No user found for valid session {session_id}")
+                return JSONResponse(
+                    status_code=status.HTTP_200_OK,
+                    content={
+                        "authenticated": False,
+                        "message": "User not found"
+                    }
+                )
+
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": True,
+                    "user": user,
+                    "session_status": "active"
+                }
+            )
+        except Exception as user_error:
+            logger.error(f"Auth status check: Error getting user data: {str(user_error)}")
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={
+                    "authenticated": False,
+                    "message": "Error retrieving user data"
+                }
+            )
+
     except Exception as e:
-        logger.error(f"Auth status error: {str(e)}")
+        logger.error(f"Auth status check: Unexpected error: {str(e)}")
         return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_200_OK,
             content={
                 "authenticated": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "session_status": "error"
             }
         )
@@ -435,6 +455,25 @@ async def send_message(
     except Exception as e:
         logger.error(f"Error processing message: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Mount static files from React build after all API routes
+app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
+app.mount("/", StaticFiles(directory="static/react", html=True), name="spa")
+
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc: HTTPException):
+    """Handle 404 errors by serving the React app"""
+    # Only handle non-API routes
+    if request.url.path.startswith("/api") or request.url.path in [
+        "/login", "/logout", "/auth_status", 
+        "/chat_history", "/video_analysis_history", "/send_message"
+    ]:
+        raise exc
+    try:
+        return FileResponse("static/react/index.html")
+    except Exception as e:
+        logger.error(f"Error serving SPA: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error serving application")
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)
