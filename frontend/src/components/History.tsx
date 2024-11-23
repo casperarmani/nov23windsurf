@@ -18,18 +18,22 @@ function History({ chatHistory, videoHistory }: HistoryProps) {
           <ScrollArea className="h-[400px] w-full rounded-md border p-4">
             {chatHistory.length > 0 ? (
               chatHistory.map((msg, index) => (
-                <div key={index} className="mb-4">
-                  <div className="text-xs text-muted-foreground">
-                    {new Date(msg.TIMESTAMP).toLocaleString()}
+                <div key={index} className={`mb-4 p-3 rounded-lg ${
+                  msg.chat_type === 'bot' ? 'bg-secondary/50' : 'bg-primary/10'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-medium text-sm">
+                      {msg.chat_type === 'bot' ? 'Chatbot' : 'You'}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(msg.TIMESTAMP).toLocaleString()}
+                    </div>
                   </div>
-                  <div className="font-medium">
-                    {msg.chat_type === 'bot' ? 'Chatbot' : 'You'}:
-                  </div>
-                  <div className="text-sm">{msg.message}</div>
+                  <div className="text-sm whitespace-pre-wrap">{msg.message}</div>
                 </div>
               ))
             ) : (
-              <div className="text-sm text-muted-foreground">
+              <div className="text-sm text-muted-foreground text-center p-4">
                 No chat history available
               </div>
             )}
