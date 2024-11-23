@@ -9,10 +9,11 @@ import { Upload, X } from 'lucide-react';
 import { useChat } from '../context/ChatContext';
 
 interface ChatContainerProps {
+  initialMessages?: Message[];
   onCreateSession?: () => void;
 }
 
-function ChatContainer({ onCreateSession }: ChatContainerProps) {
+function ChatContainer({ initialMessages = [], onCreateSession }: ChatContainerProps) {
   const { currentSession, messages, isLoading, sendMessage } = useChat();
   const [message, setMessage] = useState<string>('');
   const [files, setFiles] = useState<File[]>([]);

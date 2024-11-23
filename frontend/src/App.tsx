@@ -43,15 +43,38 @@ function App() {
     }
   };
 
-  const handleNewChat = () => {
-    const newChat: Chat = {
-      id: Date.now().toString(),
-      title: `New Chat ${chats.length + 1}`,
-      messages: [],
-      timestamp: new Date().toISOString()
-    };
-    setChats([newChat, ...chats]);
-    setCurrentChatId(newChat.id);
+  const handleNewChat = async () => {
+    try {
+      const response = await fetch('/chat_sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: `New Chat ${chats.length + 1}`
+        }),
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create chat session');
+      }
+
+      const newSession = await response.json();
+      const newChat: Chat = {
+        id: newSession.id,
+        title: newSession.title,
+        messages: [],
+        timestamp: newSession.created_at
+      };
+      
+      setChats([newChat, ...chats]);
+      setCurrentChatId(newChat.id);
+      await fetchHistories(); // Refresh chat history
+    } catch (error) {
+      console.error('Error creating chat session:', error);
+      setError(error instanceof Error ? error.message : 'Failed to create chat session');
+    }
   };
 
   const handleSelectChat = (chatId: string) => {
@@ -97,9 +120,8 @@ function App() {
               <div className="grid grid-cols-1 gap-8">
                 <ChatContainer 
                   key={currentChatId || 'new'} 
-                  chatId={currentChatId}
-                  initialMessages={currentChat?.messages || []}
-                  onMessageSent={handleMessageSent}
+                  initialMessages={chatHistory}
+                  onCreateSession={handleNewChat}
                 />
               </div>
             </div>
