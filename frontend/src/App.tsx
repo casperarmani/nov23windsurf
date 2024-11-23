@@ -47,23 +47,23 @@ function App() {
       const chatData = await chatResponse.json();
       const chatHistory = Array.isArray(chatData) ? chatData : [];
       
-      // Group messages by session_id with chronological ordering
+      // Group messages by session_id maintaining chronological order
       const groupedBySession = chatHistory.reduce((acc: { [key: string]: ChatHistory[] }, msg) => {
         const sessionId = msg.session_id || 'default';
         if (!acc[sessionId]) {
           acc[sessionId] = [];
         }
-        // Insert while maintaining chronological order
-        const index = acc[sessionId].findIndex(m => 
-          new Date(m.TIMESTAMP) > new Date(msg.TIMESTAMP)
-        );
-        if (index === -1) {
-          acc[sessionId].push(msg);
-        } else {
-          acc[sessionId].splice(index, 0, msg);
-        }
+        // Maintain chronological order within each session
+        acc[sessionId].push(msg);
         return acc;
       }, {});
+
+      // Sort messages within each session by timestamp
+      Object.keys(groupedBySession).forEach(sessionId => {
+        groupedBySession[sessionId].sort((a, b) => 
+          new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
+        );
+      });
 
       // Update cache with all sessions
       setSessionCache(prev => ({

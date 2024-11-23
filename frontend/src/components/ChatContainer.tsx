@@ -72,7 +72,11 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
   useEffect(() => {
     if (user && chatId) {
       if (initialMessages?.length > 0) {
-        setChatMessages(initialMessages);
+        // Sort messages by timestamp
+        const sortedMessages = [...initialMessages].sort((a, b) => 
+          new Date(a.timestamp || '').getTime() - new Date(b.timestamp || '').getTime()
+        );
+        setChatMessages(sortedMessages);
       } else {
         fetchChatHistory();
       }
