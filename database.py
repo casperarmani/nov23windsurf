@@ -57,6 +57,7 @@ class Database:
                     .execute()
                     
                 if not session_check.data:
+                    logger.warning(f"Chat session {session_id} not found for user {user_id}")
                     raise HTTPException(status_code=404, detail="Chat session not found")
             
             # Build query with exact column names and proper timestamp field
@@ -64,7 +65,7 @@ class Database:
                 .select('id,user_id,session_id,message,chat_type,"TIMESTAMP"')\
                 .eq('user_id', user_id)\
                 .is_('deleted_at', 'null')\
-                .order('TIMESTAMP', desc=True)\
+                .order('TIMESTAMP', asc=True)\
                 .limit(limit)
             
             if session_id:
@@ -79,19 +80,28 @@ class Database:
             # Format response to match frontend expectations
             formatted_messages = []
             for msg in response.data:
-                # Convert database chat_type to frontend format
-                chat_type = 'bot' if msg['chat_type'] == 'bot' else 'user'
+                # Normalize chat_type to either 'user' or 'bot'
+                chat_type = 'bot' if msg['chat_type'] in ['bot', 'assistant'] else 'user'
+                
+                # Ensure timestamp is in ISO format
+                try:
+                    timestamp = datetime.fromisoformat(msg['TIMESTAMP'].replace('Z', '+00:00'))
+                    formatted_timestamp = timestamp.isoformat()
+                except (ValueError, AttributeError):
+                    logger.warning(f"Invalid timestamp format for message {msg['id']}")
+                    formatted_timestamp = datetime.utcnow().isoformat()
                 
                 formatted_messages.append({
-                    'id': str(msg['id']),  # Ensure ID is string
-                    'user_id': msg['user_id'],
-                    'session_id': msg['session_id'],
+                    'id': str(msg['id']),
+                    'user_id': str(msg['user_id']),
+                    'session_id': str(msg['session_id']),
                     'message': msg['message'],
                     'chat_type': chat_type,
-                    'timestamp': msg['TIMESTAMP']
+                    'timestamp': formatted_timestamp
                 })
             
-            logger.info(f"Retrieved {len(formatted_messages)} messages for user {user_id}")
+            logger.info(f"Retrieved and formatted {len(formatted_messages)} messages for user {user_id}")
+            logger.debug(f"Sample message format: {formatted_messages[0] if formatted_messages else 'No messages'}")
             return formatted_messages
         except Exception as e:
             logger.error(f"Database error in get_chat_history: {str(e)}")
