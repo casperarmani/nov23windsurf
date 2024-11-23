@@ -57,20 +57,26 @@ function App() {
         throw new Error('Invalid video history data format');
       }
 
-      // Extensive logging of individual items
-      console.log('Chat History First Item:', chatHistory[0]);
-      console.log('Video History First Item:', videoHistory[0]);
+      // Convert chat history to chats
+      const convertedChats: Chat[] = chatHistory.map(chatItem => ({
+        id: chatItem.id || crypto.randomUUID(),
+        title: chatItem.message.length > 30 
+          ? chatItem.message.slice(0, 30) + '...' 
+          : (chatItem.message || 'Untitled Chat'),
+        messages: [{
+          type: chatItem.chat_type || 'user',
+          content: chatItem.message || ''
+        }],
+        timestamp: chatItem.TIMESTAMP || new Date().toISOString()
+      }));
 
-      // Add some default values or transformations if needed
-      const sanitizedChatHistory = chatHistory.map(chat => {
-        console.log('Processing Chat Item:', chat);
-        return {
-          TIMESTAMP: chat.TIMESTAMP || chat.timestamp || new Date().toISOString(),
-          chat_type: chat.chat_type || 'user',
-          message: chat.message || '',
-          id: chat.id || crypto.randomUUID()
-        };
-      });
+      // Sanitize and set states
+      const sanitizedChatHistory = chatHistory.map(chat => ({
+        TIMESTAMP: chat.TIMESTAMP || chat.timestamp || new Date().toISOString(),
+        chat_type: chat.chat_type || 'user',
+        message: chat.message || '',
+        id: chat.id || crypto.randomUUID()
+      }));
 
       const sanitizedVideoHistory = videoHistory.map(video => ({
         TIMESTAMP: video.TIMESTAMP || video.timestamp || new Date().toISOString(),
@@ -79,9 +85,12 @@ function App() {
         id: video.id || crypto.randomUUID()
       }));
 
+      // Update states
       setChatHistory(sanitizedChatHistory);
       setVideoHistory(sanitizedVideoHistory);
+      setChats(convertedChats);
 
+      console.log('Converted Chats:', convertedChats);
       console.log('Sanitized Chat History:', sanitizedChatHistory);
       console.log('Sanitized Video History:', sanitizedVideoHistory);
     } catch (error) {
@@ -94,6 +103,7 @@ function App() {
       // Set empty arrays to prevent undefined errors
       setChatHistory([]);
       setVideoHistory([]);
+      setChats([]);
     }
   };
 
