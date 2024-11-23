@@ -44,7 +44,7 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
         const data = await response.json();
         if (Array.isArray(data)) {
           const formattedMessages = data.map(msg => ({
-            type: msg.chat_type === 'bot' ? 'bot' : 'user',
+            type: msg.chat_type === 'bot' ? 'bot' as const : 'user' as const,
             content: msg.message
           }));
           setChatMessages(formattedMessages);

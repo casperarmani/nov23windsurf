@@ -46,9 +46,11 @@ class Database:
 
     async def get_chat_history(self, user_id: str, session_id: Optional[str] = None, limit: int = 50) -> List[dict]:
         try:
+            logger.info(f"Fetching chat history for user {user_id} and session {session_id}")
+            
             # Build query with exact column names and proper timestamp field
             query = self.supabase.table('user_chat_history')\
-                .select('id,user_id,session_id,message,chat_type,"TIMESTAMP",last_updated')\
+                .select('id,user_id,session_id,message,chat_type,"TIMESTAMP"')\
                 .eq('user_id', user_id)\
                 .is_('deleted_at', 'null')\
                 .order('TIMESTAMP', desc=True)\
@@ -60,9 +62,21 @@ class Database:
             response = query.execute()
             
             if not response.data:
+                logger.info(f"No chat history found for user {user_id}")
                 return []
-                
-            return response.data
+            
+            # Format response to match frontend expectations
+            formatted_messages = [{
+                'id': msg['id'],
+                'user_id': msg['user_id'],
+                'session_id': msg['session_id'],
+                'message': msg['message'],
+                'chat_type': msg['chat_type'],
+                'timestamp': msg['TIMESTAMP']
+            } for msg in response.data]
+            
+            logger.info(f"Retrieved {len(formatted_messages)} messages for user {user_id}")
+            return formatted_messages
         except Exception as e:
             logger.error(f"Database error in get_chat_history: {str(e)}")
             if 'violates foreign key constraint' in str(e):
