@@ -642,10 +642,6 @@ async def metrics():
             "timestamp": datetime.utcnow().isoformat()
         }
 
-# Mount static files from React build after all API routes
-app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
-app.mount("/", StaticFiles(directory="static/react", html=True), name="spa-root")
-
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: HTTPException):
     """Handle 404 errors by serving the React app"""
@@ -657,6 +653,10 @@ async def not_found_handler(request: Request, exc: HTTPException):
     except Exception as e:
         logger.error(f"Error serving SPA: {str(e)}")
         raise HTTPException(status_code=500, detail="Error serving application")
+
+# Mount static files AFTER all API routes
+app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
+app.mount("/", StaticFiles(directory="static/react", html=True), name="spa-root")
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=3000, reload=True)
