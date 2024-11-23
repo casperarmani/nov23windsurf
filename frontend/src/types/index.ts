@@ -10,6 +10,7 @@ export interface ChatHistory {
   chat_type: 'user' | 'bot';
   message: string;
   id?: string;
+  session_id?: string;
 }
 
 export interface VideoHistory {

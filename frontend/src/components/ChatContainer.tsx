@@ -43,7 +43,7 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
       }
       
       // Only update if we're still on the same chat
-      if (chatId === props.chatId) {
+      if (chatId) {
         // Sort messages by timestamp in ascending order
         const sortedMessages = [...data].sort((a, b) => 
           new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
@@ -51,8 +51,8 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
         
         // Transform messages maintaining all necessary information
         const transformedMessages: Message[] = sortedMessages.map((msg) => ({
-          type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'bot' | 'user' | 'error',
-          content: msg.message,
+          type: msg.chat_type === 'user' ? 'user' : 'bot',
+          content: msg.message || '',
           timestamp: msg.TIMESTAMP,
           sessionId: msg.session_id
         }));
@@ -96,6 +96,9 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
     try {
       const formData = new FormData();
       formData.append('message', message.trim());
+      if (chatId) {
+        formData.append('session_id', chatId);
+      }
       
       files.forEach((file) => {
         formData.append('videos', file);

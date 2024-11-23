@@ -93,15 +93,38 @@ function App() {
     }
   };
 
-  const handleNewChat = () => {
-    const newChat: Chat = {
-      id: Date.now().toString(),
-      title: `New Chat ${chats.length + 1}`,
-      messages: [],
-      timestamp: new Date().toISOString()
-    };
-    setChats([newChat, ...chats]);
-    setCurrentChatId(newChat.id);
+  const handleNewChat = async () => {
+    try {
+      // Create new chat session in backend
+      const response = await fetch('/chat_sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: `New Chat ${chats.length + 1}`
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create chat session');
+      }
+      
+      const session = await response.json();
+      const newChat: Chat = {
+        id: session.id,
+        title: session.title,
+        messages: [],
+        timestamp: new Date().toISOString(),
+        session_id: session.id
+      };
+      
+      setChats([newChat, ...chats]);
+      setCurrentChatId(newChat.id);
+    } catch (error) {
+      console.error('Error creating new chat:', error);
+      setError('Failed to create new chat');
+    }
   };
 
   const handleSelectChat = async (chatId: string) => {
