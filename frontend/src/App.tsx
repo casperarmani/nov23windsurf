@@ -4,18 +4,32 @@ import History from './components/History';
 import { Sidebar } from './components/Sidebar';
 import { ChatHistory, VideoHistory, ApiResponse, Chat, Message } from './types';
 
+interface SessionCache {
+  [sessionId: string]: ChatHistory[];
+}
+
 function App() {
   const [chatHistory, setChatHistory] = React.useState<ChatHistory[]>([]);
   const [videoHistory, setVideoHistory] = React.useState<VideoHistory[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [chats, setChats] = React.useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = React.useState<string | null>(null);
+  const [sessionCache, setSessionCache] = React.useState<SessionCache>({});
 
-  const fetchHistories = async () => {
+  const fetchHistories = async (sessionId?: string) => {
     try {
       setError(null);
+      
+      // Check cache for session-specific messages
+      if (sessionId && sessionCache[sessionId]) {
+        console.log('Using cached messages for session:', sessionId);
+        setChatHistory(sessionCache[sessionId]);
+        return;
+      }
+
+      const url = sessionId ? `/chat_history?session_id=${sessionId}` : '/chat_history';
       const [chatResponse, videoResponse] = await Promise.all([
-        fetch('/chat_history'),
+        fetch(url),
         fetch('/video_analysis_history')
       ]);
 
@@ -24,12 +38,20 @@ function App() {
         video: videoResponse.status
       });
 
-      // Handle chat history
+      // Process chat history response
       let chatHistory: ChatHistory[] = [];
       try {
         const chatData = await chatResponse.json();
         chatHistory = Array.isArray(chatData) ? chatData : [];
         console.log('Raw Chat History:', chatHistory);
+
+        // Update cache if session-specific
+        if (sessionId) {
+          setSessionCache(prev => ({
+            ...prev,
+            [sessionId]: chatHistory
+          }));
+        }
       } catch (error) {
         console.error('Error parsing chat response:', error);
         setError('Failed to load chat history');
@@ -46,23 +68,27 @@ function App() {
         setError('Failed to load video history');
       }
 
-      // Convert chat history to Chat objects with proper error handling
-      const convertedChats: Chat[] = chatHistory.map(chatItem => {
-        try {
-          return {
-            id: chatItem.id || crypto.randomUUID(),
-            title: chatItem.message?.slice(0, 30) || 'Untitled Chat',
-            messages: [{
-              type: chatItem.chat_type === 'text' ? 'user' : chatItem.chat_type,
-              content: chatItem.message || ''
-            }],
-            timestamp: chatItem.TIMESTAMP
-          };
-        } catch (error) {
-          console.error('Error converting chat item:', error, chatItem);
-          return null;
-        }
-      }).filter((chat): chat is Chat => chat !== null);
+      // Convert to Chat objects only if needed for current session
+      const convertedChats = chatHistory
+        .filter(chat => !sessionId || chat.session_id === sessionId)
+        .map(chatItem => {
+          try {
+            return {
+              id: chatItem.id || crypto.randomUUID(),
+              title: chatItem.message?.slice(0, 30) || 'Untitled Chat',
+              messages: [{
+                type: chatItem.chat_type === 'text' ? 'user' : chatItem.chat_type,
+                content: chatItem.message || ''
+              }],
+              timestamp: chatItem.TIMESTAMP,
+              session_id: chatItem.session_id
+            };
+          } catch (error) {
+            console.error('Error converting chat item:', error, chatItem);
+            return null;
+          }
+        })
+        .filter((chat): chat is Chat => chat !== null);
 
       console.log('Converted Chats:', convertedChats);
 
@@ -131,6 +157,10 @@ function App() {
 
   const handleSelectChat = (chatId: string) => {
     setCurrentChatId(chatId);
+    const chat = chats.find(c => c.id === chatId);
+    if (chat?.session_id) {
+      fetchHistories(chat.session_id);
+    }
   };
 
   const handleMessageSent = (messages: Message[], chatId: string) => {

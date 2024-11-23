@@ -29,4 +29,5 @@ export interface Chat {
   title: string;
   messages: Message[];
   timestamp: string;
+  session_id?: string;
 }
