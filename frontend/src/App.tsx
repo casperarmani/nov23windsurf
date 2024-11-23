@@ -2,6 +2,7 @@ import React from 'react';
 import ChatContainer from './components/ChatContainer';
 import History from './components/History';
 import { Sidebar } from './components/Sidebar';
+import { ChatProvider } from './context/ChatContext';
 import { ChatHistory, VideoHistory, ApiResponse, Chat, Message } from './types';
 
 function App() {
@@ -23,19 +24,19 @@ function App() {
         throw new Error('Failed to fetch history data');
       }
 
-      const chatData: ApiResponse<ChatHistory> = await chatResponse.json();
-      const videoData: ApiResponse<VideoHistory> = await videoResponse.json();
+      const chatData: ApiResponse<ChatHistory[]> = await chatResponse.json();
+      const videoData: ApiResponse<VideoHistory[]> = await videoResponse.json();
       
-      if (!chatData?.history || !Array.isArray(chatData.history)) {
+      if (!chatData?.data || !Array.isArray(chatData.data)) {
         throw new Error('Invalid chat history data format');
       }
 
-      if (!videoData?.history || !Array.isArray(videoData.history)) {
+      if (!videoData?.data || !Array.isArray(videoData.data)) {
         throw new Error('Invalid video history data format');
       }
 
-      setChatHistory(chatData.history);
-      setVideoHistory(videoData.history);
+      setChatHistory(chatData.data);
+      setVideoHistory(videoData.data);
     } catch (error) {
       console.error('Error fetching histories:', error);
       setError(error instanceof Error ? error.message : 'An error occurred while fetching data');
@@ -75,8 +76,9 @@ function App() {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-300">
-      <Sidebar 
+    <ChatProvider>
+      <div className="flex h-screen overflow-hidden bg-gray-300">
+        <Sidebar 
         className="border-r" 
         chats={chats}
         currentChatId={currentChatId}
@@ -104,7 +106,8 @@ function App() {
           </div>
         </div>
       </main>
-    </div>
+      </div>
+    </ChatProvider>
   );
 }
 
