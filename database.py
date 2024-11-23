@@ -1,3 +1,91 @@
+from datetime import datetime
+import uuid
+from typing import List, Optional
+from fastapi import HTTPException
+
+class Database:
+    def __init__(self, supabase_client):
+        self.supabase = supabase_client
+
+    async def create_chat_session(self, user_id: str, title: str = "New Chat") -> dict:
+        try:
+            response = self.supabase.table('chat_sessions').insert({
+                'user_id': user_id,
+                'title': title
+            }).execute()
+            return response.data[0]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create chat session: {str(e)}")
+
+    async def get_user_chat_sessions(self, user_id: str) -> List[dict]:
+        try:
+            response = self.supabase.table('chat_sessions')\
+                .select('*')\
+                .eq('user_id', user_id)\
+                .order('updated_at', desc=True)\
+                .execute()
+            return response.data
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to get chat sessions: {str(e)}")
+
+    async def update_chat_session(self, session_id: str, title: str) -> dict:
+        try:
+            response = self.supabase.table('chat_sessions')\
+                .update({'title': title, 'updated_at': datetime.utcnow().isoformat()})\
+                .eq('id', session_id)\
+                .execute()
+            return response.data[0]
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to update chat session: {str(e)}")
+
+    async def get_chat_history(self, user_id: str, session_id: Optional[str] = None, limit: int = 50) -> List[dict]:
+        try:
+            query = self.supabase.table('user_chat_history')\
+                .select('*')\
+                .eq('user_id', user_id)\
+                .order('timestamp', desc=True)\
+                .limit(limit)
+            
+            if session_id:
+                query = query.eq('session_id', session_id)
+            
+            response = query.execute()
+            return response.data
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to get chat history: {str(e)}")
+
+    async def save_chat_message(self, user_id: str, message: str, response: str, session_id: Optional[str] = None) -> dict:
+        try:
+            # If no session_id provided, create a new session
+            if not session_id:
+                session = await self.create_chat_session(user_id)
+                session_id = session['id']
+            
+            # Save user message
+            user_msg = self.supabase.table('user_chat_history').insert({
+                'user_id': user_id,
+                'message': message,
+                'response': None,
+                'session_id': session_id
+            }).execute()
+
+            # Save bot response
+            bot_msg = self.supabase.table('user_chat_history').insert({
+                'user_id': user_id,
+                'message': None,
+                'response': response,
+                'session_id': session_id
+            }).execute()
+
+            # Update session's updated_at timestamp
+            self.supabase.table('chat_sessions')\
+                .update({'updated_at': datetime.utcnow().isoformat()})\
+                .eq('id', session_id)\
+                .execute()
+
+            return {'user_message': user_msg.data[0], 'bot_message': bot_msg.data[0]}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save chat message: {str(e)}")
 import os
 from supabase.client import create_client, Client
 from typing import List, Dict, Optional
