@@ -19,18 +19,28 @@ function App() {
         fetch('/video_analysis_history')
       ]);
 
-      if (!chatResponse.ok || !videoResponse.ok) {
-        throw new Error('Failed to fetch history data');
+      console.log('Chat Response Status:', chatResponse.status);
+      console.log('Video Response Status:', videoResponse.status);
+
+      // Log full response text before parsing
+      const chatResponseText = await chatResponse.text();
+      console.log('Full Chat Response Text:', chatResponseText);
+
+      // Defensive parsing
+      let chatData: ApiResponse<ChatHistory>;
+      try {
+        chatData = JSON.parse(chatResponseText);
+      } catch (parseError) {
+        console.error('Failed to parse chat response:', parseError);
+        chatData = { history: [], total_count: 0 };
       }
 
-      const chatData: ApiResponse<ChatHistory> = await chatResponse.json();
-      const videoData: ApiResponse<VideoHistory> = await videoResponse.json();
-
-      // Ensure consistent data format
+      // Ensure consistent data format with fallbacks
       const chatHistory = Array.isArray(chatData.history) 
         ? chatData.history 
         : (chatData.history || []);
 
+      const videoData: ApiResponse<VideoHistory> = await videoResponse.json();
       const videoHistory = Array.isArray(videoData.history) 
         ? videoData.history 
         : (videoData.history || []);
@@ -38,29 +48,31 @@ function App() {
       console.log('Raw Chat History:', chatHistory);
 
       // More robust chat history conversion
-      const convertedChats: Chat[] = chatHistory.map(chatItem => ({
-        id: chatItem.id || crypto.randomUUID(),
-        title: chatItem.message.length > 30 
-          ? chatItem.message.slice(0, 30) + '...' 
-          : (chatItem.message || 'Untitled Chat'),
-        messages: [{
-          type: chatItem.chat_type || 'user',
-          content: chatItem.message || ''
-        }],
-        timestamp: chatItem.TIMESTAMP || new Date().toISOString()
-      }));
+      const convertedChats: Chat[] = chatHistory.length > 0 
+        ? chatHistory.map(chatItem => ({
+            id: chatItem.id || crypto.randomUUID(),
+            title: chatItem.message.length > 30 
+              ? chatItem.message.slice(0, 30) + '...' 
+              : (chatItem.message || 'Untitled Chat'),
+            messages: [{
+              type: chatItem.chat_type || 'user',
+              content: chatItem.message || ''
+            }],
+            timestamp: chatItem.TIMESTAMP || new Date().toISOString()
+          }))
+        : [];
 
       console.log('Converted Chats:', convertedChats);
 
       // Sanitize histories with comprehensive fallback values
-      const sanitizedChatHistory = chatHistory.map(chat => ({
-        TIMESTAMP: chat.TIMESTAMP || chat.timestamp || new Date().toISOString(),
-        chat_type: chat.chat_type || 'user',
-        message: chat.message || '',
-        id: chat.id || crypto.randomUUID()
-      }));
-
-      console.log('Sanitized Chat History:', sanitizedChatHistory);
+      const sanitizedChatHistory = chatHistory.length > 0 
+        ? chatHistory.map(chat => ({
+            TIMESTAMP: chat.TIMESTAMP || chat.timestamp || new Date().toISOString(),
+            chat_type: chat.chat_type || 'user',
+            message: chat.message || '',
+            id: chat.id || crypto.randomUUID()
+          }))
+        : [];
 
       const sanitizedVideoHistory = videoHistory.map(video => ({
         TIMESTAMP: video.TIMESTAMP || video.timestamp || new Date().toISOString(),
@@ -70,18 +82,21 @@ function App() {
       }));
 
       // Sorting chats by timestamp to ensure chronological order
-      convertedChats.sort((a, b) => 
+      const sortedChats = convertedChats.sort((a, b) => 
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
+
+      console.log('Sorted Chats:', sortedChats);
+      console.log('Sanitized Chat History:', sanitizedChatHistory);
 
       // Update states with sorted and sanitized data
       setChatHistory(sanitizedChatHistory);
       setVideoHistory(sanitizedVideoHistory);
-      setChats(convertedChats);
+      setChats(sortedChats);
 
       // Optional: Set current chat to most recent if no current chat
-      if (!currentChatId && convertedChats.length > 0) {
-        setCurrentChatId(convertedChats[0].id);
+      if (!currentChatId && sortedChats.length > 0) {
+        setCurrentChatId(sortedChats[0].id);
       }
 
     } catch (error) {

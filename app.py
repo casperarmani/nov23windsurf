@@ -488,9 +488,11 @@ async def get_chat_history_endpoint(request: Request):
                 content={"history": [], "error": "Unauthorized"}
             )
         
-        # Remove cache-related complexity for now
+        logger.info(f"Fetching chat history for user {user['id']}")
+        
         try:
             history = await get_chat_history(uuid.UUID(user['id']))
+            logger.info(f"Raw history from database: {history}")
         except Exception as db_error:
             logger.error(f"Database error fetching chat history: {str(db_error)}")
             return JSONResponse(
@@ -503,11 +505,11 @@ async def get_chat_history_endpoint(request: Request):
         for item in history:
             try:
                 formatted_item = {
-                    "TIMESTAMP": item.get('TIMESTAMP') or item.get('timestamp') or datetime.now().isoformat(),
-                    "chat_type": item.get('chat_type', 'user'),
-                    "message": item.get('message', ''),
+                    "TIMESTAMP": str(item.get('TIMESTAMP') or item.get('timestamp') or datetime.now().isoformat()),
+                    "chat_type": str(item.get('chat_type', 'user')),
+                    "message": str(item.get('message', '')),
                     "id": str(item.get('id') or uuid.uuid4()),
-                    "session_id": item.get('session_id')  # Add session_id for better tracking
+                    "session_id": str(item.get('session_id', ''))
                 }
                 formatted_history.append(formatted_item)
             except Exception as format_error:
@@ -518,6 +520,8 @@ async def get_chat_history_endpoint(request: Request):
             key=lambda x: datetime.fromisoformat(x['TIMESTAMP']), 
             reverse=True
         )
+        
+        logger.info(f"Formatted history response: {formatted_history}")
         
         return JSONResponse(content={
             "history": formatted_history,

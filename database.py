@@ -147,19 +147,6 @@ class Database:
             if 'violates foreign key constraint' in str(e):
                 raise HTTPException(status_code=400, detail="Invalid session or user ID")
             raise HTTPException(status_code=500, detail=f"Failed to save chat message: {str(e)}")
-import os
-from supabase.client import create_client, Client
-from typing import List, Dict, Optional
-import uuid
-
-# Initialize Supabase client
-supabase_url = os.environ.get("SUPABASE_URL")
-supabase_key = os.environ.get("SUPABASE_ANON_KEY")
-
-if not supabase_url or not supabase_key:
-    raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables")
-
-supabase: Client = create_client(supabase_url, supabase_key)
 
 async def create_user(email: str) -> Dict:
     response = supabase.table("users").insert({"email": email}).execute()
@@ -185,8 +172,46 @@ async def insert_chat_message(user_id: uuid.UUID, message: str, chat_type: str =
     return response.data[0] if response.data else {}
 
 async def get_chat_history(user_id: uuid.UUID, limit: int = 50) -> List[Dict]:
-    response = supabase.table("user_chat_history").select("*").eq("user_id", str(user_id)).order("TIMESTAMP", desc=True).limit(limit).execute()
-    return response.data
+    try:
+        logger.info(f"Attempting to fetch chat history for user {user_id}")
+        
+        # Convert user_id to string and ensure it's a valid UUID
+        user_id_str = str(user_id)
+        
+        response = supabase.table("user_chat_history")\
+            .select("*")\
+            .eq("user_id", user_id_str)\
+            .order("TIMESTAMP", desc=True)\
+            .limit(limit)\
+            .execute()
+        
+        logger.info(f"Raw database response: {response.data}")
+        
+        if not response.data:
+            logger.warning(f"No chat history found for user {user_id}")
+            return []
+        
+        # Transform data to ensure consistent format
+        transformed_data = []
+        for item in response.data:
+            try:
+                transformed_item = {
+                    'TIMESTAMP': item.get('TIMESTAMP') or datetime.now().isoformat(),
+                    'chat_type': item.get('chat_type', 'user'),
+                    'message': item.get('message', ''),
+                    'id': str(item.get('id') or uuid.uuid4()),
+                    'user_id': user_id_str
+                }
+                transformed_data.append(transformed_item)
+            except Exception as transform_error:
+                logger.error(f"Error transforming chat history item: {transform_error}")
+        
+        logger.info(f"Transformed chat history: {transformed_data}")
+        return transformed_data
+    
+    except Exception as e:
+        logger.error(f"Error fetching chat history for user {user_id}: {str(e)}")
+        return []
 
 async def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analysis: str, video_duration: Optional[str] = None, video_format: Optional[str] = None) -> Dict:
     response = supabase.table("video_analysis_output").insert({
@@ -201,3 +226,17 @@ async def insert_video_analysis(user_id: uuid.UUID, upload_file_name: str, analy
 async def get_video_analysis_history(user_id: uuid.UUID, limit: int = 10) -> List[Dict]:
     response = supabase.table("video_analysis_output").select("*").eq("user_id", str(user_id)).order("TIMESTAMP", desc=True).limit(limit).execute()
     return response.data
+
+import os
+from supabase.client import create_client, Client
+from typing import List, Dict, Optional
+import uuid
+
+# Initialize Supabase client
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_ANON_KEY")
+
+if not supabase_url or not supabase_key:
+    raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables")
+
+supabase: Client = create_client(supabase_url, supabase_key)
