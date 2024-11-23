@@ -32,7 +32,11 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
         throw new Error('Failed to fetch chat history');
       }
       const data = await response.json();
-      setChatMessages(data.history || []);
+      const transformedMessages: Message[] = (data.history || []).map((msg: ChatHistory) => ({
+        type: msg.chat_type === 'text' ? 'user' : msg.chat_type as 'bot' | 'user' | 'error',
+        content: msg.message
+      }));
+      setChatMessages(transformedMessages);
     } catch (error) {
       console.error('Failed to fetch chat history:', error);
       setError('Could not load chat history. Please try again later.');
