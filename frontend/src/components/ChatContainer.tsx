@@ -22,15 +22,12 @@ function ChatContainer({ onUpload }: ChatContainerProps) {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [chatMessages]);
-
-  useEffect(() => {
-    setChatMessages(initialMessages);
-  }, [initialMessages]);
+  }, [messages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,12 +101,17 @@ function ChatContainer({ onUpload }: ChatContainerProps) {
   return (
     <div className="flex flex-col h-[800px] rounded-3xl bg-black/10 backdrop-blur-xl border border-white/10">
       <ChatHeader />
-      {chatMessages.length === 0 && <ChatWelcome />}
+      {messages.length === 0 && <ChatWelcome />}
       
       <ScrollArea className="flex-grow px-6">
         <div className="space-y-6">
-          {chatMessages.map((msg, index) => (
-            <ChatMessage key={index} message={msg} />
+          {messages.map((msg) => (
+            <ChatMessage 
+              key={msg.id} 
+              message={msg.message}
+              isUser={msg.chat_type === 'user'}
+              timestamp={msg.timestamp}
+            />
           ))}
         </div>
       </ScrollArea>
