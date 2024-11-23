@@ -94,8 +94,8 @@ class Database:
                 reverse=True
             )
             
-            # Log transformed data for debugging
-            logger.info(f"Transformed chat history for user {user_id}: {transformed_history}")
+            # Log transformed data only at debug level
+            logger.debug(f"Transformed chat history for user {user_id}: {transformed_history}")
             
             return transformed_history
         

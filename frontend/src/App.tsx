@@ -20,10 +20,18 @@ function App() {
     try {
       setError(null);
       
-      // Check cache for session-specific messages
+      // If sessionId provided and cached, use cache
       if (sessionId && sessionCache[sessionId]) {
         console.log('Using cached messages for session:', sessionId);
         setChatHistory(sessionCache[sessionId]);
+        return;
+      }
+
+      // If no sessionId and we have a complete cache, use it
+      if (!sessionId && Object.keys(sessionCache).length > 0) {
+        console.log('Using complete cache');
+        const allMessages = Object.values(sessionCache).flat();
+        setChatHistory(allMessages);
         return;
       }
 
@@ -31,14 +39,13 @@ function App() {
       const url = sessionId ? `/chat_history?session_id=${sessionId}` : '/chat_history';
       const chatResponse = await fetch(url);
       
-      console.log('Response Status:', {
-        chat: chatResponse.status
-      });
+      if (!chatResponse.ok) {
+        throw new Error(`Failed to fetch chat history: ${chatResponse.status}`);
+      }
 
       // Process chat history response
       const chatData = await chatResponse.json();
       const chatHistory = Array.isArray(chatData) ? chatData : [];
-      console.log('Raw Chat History:', chatHistory);
       
       // Group messages by session_id
       const groupedBySession = chatHistory.reduce((acc: { [key: string]: ChatHistory[] }, msg) => {
