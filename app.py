@@ -215,7 +215,7 @@ async def get_chat_history(
     """Get chat history for a specific session or all sessions."""
     try:
         messages = await db.get_chat_history(user['id'], session_id)
-        return JSONResponse(content=messages)
+        return JSONResponse(content={"history": messages})
     except Exception as e:
         logger.error(f"Error getting chat history: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
