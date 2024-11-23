@@ -486,7 +486,7 @@ async def get_chat_history_endpoint(request: Request):
         if not user:
             return JSONResponse(
                 status_code=401, 
-                content={"error": "Unauthorized", "history": []}
+                content={"history": [], "error": "Unauthorized"}
             )
         
         cache_key = f"chat_history:{user['id']}"
@@ -503,7 +503,7 @@ async def get_chat_history_endpoint(request: Request):
             logger.error(f"Database error fetching chat history: {str(db_error)}")
             return JSONResponse(
                 status_code=500, 
-                content={"error": "Failed to retrieve chat history", "history": []}
+                content={"history": [], "error": "Failed to retrieve chat history"}
             )
         
         # Cache the history for future requests
@@ -516,7 +516,7 @@ async def get_chat_history_endpoint(request: Request):
         logger.error(f"Unexpected error in chat history endpoint: {str(e)}")
         return JSONResponse(
             status_code=500, 
-            content={"error": "Internal server error", "history": []}
+            content={"history": [], "error": "Internal server error"}
         )
 
 @app.get("/video_analysis_history")

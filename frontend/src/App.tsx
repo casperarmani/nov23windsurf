@@ -26,19 +26,49 @@ function App() {
       const chatData: ApiResponse<ChatHistory> = await chatResponse.json();
       const videoData: ApiResponse<VideoHistory> = await videoResponse.json();
       
-      if (!chatData?.history || !Array.isArray(chatData.history)) {
+      if (!chatData) {
+        throw new Error('No chat history data received');
+      }
+
+      if (!Array.isArray(chatData.history)) {
+        console.error('Invalid chat history format:', chatData);
         throw new Error('Invalid chat history data format');
       }
 
-      if (!videoData?.history || !Array.isArray(videoData.history)) {
+      if (!videoData) {
+        throw new Error('No video history data received');
+      }
+
+      if (!Array.isArray(videoData.history)) {
+        console.error('Invalid video history format:', videoData);
         throw new Error('Invalid video history data format');
       }
 
-      setChatHistory(chatData.history);
-      setVideoHistory(videoData.history);
+      const sanitizedChatHistory = chatData.history.map(chat => ({
+        TIMESTAMP: chat.TIMESTAMP || new Date().toISOString(),
+        chat_type: chat.chat_type || 'user',
+        message: chat.message || '',
+        id: chat.id || crypto.randomUUID()
+      }));
+
+      const sanitizedVideoHistory = videoData.history.map(video => ({
+        TIMESTAMP: video.TIMESTAMP || new Date().toISOString(),
+        upload_file_name: video.upload_file_name || 'Unknown File',
+        analysis: video.analysis || 'No analysis available',
+        id: video.id || crypto.randomUUID()
+      }));
+
+      setChatHistory(sanitizedChatHistory);
+      setVideoHistory(sanitizedVideoHistory);
+
+      console.log('Fetched Chat History:', sanitizedChatHistory);
+      console.log('Fetched Video History:', sanitizedVideoHistory);
     } catch (error) {
       console.error('Error fetching histories:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred while fetching data');
+      setError(error instanceof Error ? error.message : 'An unexpected error occurred while fetching data');
+      
+      setChatHistory([]);
+      setVideoHistory([]);
     }
   };
 

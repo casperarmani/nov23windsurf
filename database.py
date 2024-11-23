@@ -65,17 +65,14 @@ class Database:
                 logger.info(f"No chat history found for user {user_id}")
                 return []
                 
-            # Optional: Transform data if needed
+            # Transform data to match frontend ChatHistory interface
             transformed_history = []
             for msg in response.data:
                 transformed_msg = {
-                    'id': msg.get('id'),
-                    'user_id': msg.get('user_id'),
-                    'session_id': msg.get('session_id'),
+                    'TIMESTAMP': msg.get('TIMESTAMP') or datetime.now().isoformat(),
+                    'chat_type': msg.get('chat_type', 'user'),  # Default to 'user'
                     'message': msg.get('message', ''),
-                    'chat_type': msg.get('chat_type', 'text'),
-                    'timestamp': msg.get('TIMESTAMP'),
-                    'last_updated': msg.get('last_updated')
+                    'id': msg.get('id')
                 }
                 transformed_history.append(transformed_msg)
             
