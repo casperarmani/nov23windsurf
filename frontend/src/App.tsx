@@ -101,30 +101,70 @@ function App() {
     }
   };
 
-  const handleNewChat = () => {
-    const newChat: Chat = {
-      id: Date.now().toString(),
-      title: `New Chat ${chats.length + 1}`,
-      messages: [],
-      timestamp: new Date().toISOString()
-    };
-    setChats([newChat, ...chats]);
-    setCurrentChatId(newChat.id);
+  const handleNewChat = async () => {
+    try {
+      const response = await fetch('/api/create_chat_session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          title: `New Chat ${chats.length + 1}`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create new chat');
+      }
+
+      const newChat = await response.json();
+      setChats(prevChats => [{
+        id: newChat.id,
+        title: newChat.title,
+        messages: [],
+        timestamp: newChat.created_at
+      }, ...prevChats]);
+      setCurrentChatId(newChat.id);
+    } catch (error) {
+      console.error('Error creating new chat:', error);
+      setError('Failed to create new chat');
+    }
   };
 
   const handleSelectChat = (chatId: string) => {
     setCurrentChatId(chatId);
   };
 
-  const handleMessageSent = (messages: Message[], chatId: string) => {
-    setChats(prevChats => 
-      prevChats.map(chat => 
-        chat.id === chatId 
-          ? { ...chat, messages, title: messages[0]?.content.slice(0, 30) || chat.title }
-          : chat
-      )
-    );
-    fetchHistories();
+  const handleMessageSent = async (messages: Message[], chatId: string) => {
+    try {
+      const formData = new FormData();
+      formData.append('message', messages[messages.length - 1].content);
+      formData.append('session_id', chatId);
+
+      const response = await fetch('/api/send_message', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      // Update local state
+      setChats(prevChats => 
+        prevChats.map(chat => 
+          chat.id === chatId 
+            ? { ...chat, messages }
+            : chat
+        )
+      );
+
+      // Fetch updated history after message is sent
+      fetchHistories();
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setError('Failed to send message');
+    }
   };
 
   const currentChat = chats.find(chat => chat.id === currentChatId) || null;

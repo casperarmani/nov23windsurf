@@ -35,23 +35,37 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
     }
   }, [chatMessages]);
 
+  useEffect(() => {
+    console.log('Chat Messages State:', chatMessages);
+  }, [chatMessages]);
+
+  useEffect(() => {
+    console.log('Initial Messages:', chatId);
+    if (chatId) {
+      setChatMessages([]);
+    } else {
+      setChatMessages(initialMessages);
+    }
+  }, [chatId]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!message.trim() && files.length === 0) || isLoading) return;
+    if (!message.trim() || !chatId) return;
 
-    setIsLoading(true);
-    setError(null);
+    const newMessage = {
+      type: 'user',
+      content: message.trim()
+    };
+
+    // Update local state immediately for better UX
+    const updatedMessages = [...chatMessages, newMessage];
+    setChatMessages(updatedMessages);
+    setMessage('');
 
     try {
       const formData = new FormData();
-      formData.append('message', message.trim());
-      if (chatId) {
-        formData.append('session_id', chatId);
-      }
-      
-      files.forEach((file) => {
-        formData.append('videos', file);
-      });
+      formData.append('message', newMessage.content);
+      formData.append('session_id', chatId);
 
       const response = await fetch('/send_message', {
         method: 'POST',
@@ -60,34 +74,27 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error('Failed to send message');
       }
 
-      const data = await response.json();
+      const result = await response.json();
       
-      const updatedMessages: Message[] = [
-        ...chatMessages,
-        { type: 'user' as const, content: message.trim() },
-        { type: 'bot' as const, content: data.response }
-      ];
+      // Update messages with bot response
+      const botMessage = {
+        type: 'bot',
+        content: result.response
+      };
       
-      setChatMessages(updatedMessages);
+      const finalMessages = [...updatedMessages, botMessage];
+      setChatMessages(finalMessages);
       if (onMessageSent) {
-        onMessageSent(updatedMessages, data.session_id || chatId);
+        onMessageSent(finalMessages, chatId);
       }
-      
-      setMessage('');
-      setFiles([]);
-    } catch (err) {
-      console.error('Error:', err);
+    } catch (error) {
+      console.error('Error:', error);
+      // Revert the message on error
+      setChatMessages(chatMessages);
       setError('Failed to send message. Please try again.');
-      setChatMessages(prev => [
-        ...prev,
-        { type: 'user', content: message.trim() },
-        { type: 'error', content: 'Failed to send message. Please try again.' }
-      ]);
-    } finally {
-      setIsLoading(false);
     }
   };
 
