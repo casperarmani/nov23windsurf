@@ -49,12 +49,16 @@ class Database:
                 logger.warning("Attempted to retrieve chat history with empty user_id")
                 return []
 
-            # Build comprehensive query with proper session ordering
+            # Build optimized query with session filtering and ordering
             query = self.supabase.table('user_chat_history')\
                 .select('*')\
                 .eq('user_id', user_id)\
-                .is_('deleted_at', 'null')\
-                .order('TIMESTAMP', desc=False)  # Order by timestamp only
+                .is_('deleted_at', 'null')
+            
+            if session_id:
+                query = query.eq('session_id', session_id)
+                
+            query = query.order('TIMESTAMP', asc=True)  # Ensure chronological order
             
             # Optional session_id filtering
             if session_id:

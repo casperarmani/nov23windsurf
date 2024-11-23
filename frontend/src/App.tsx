@@ -20,38 +20,18 @@ function App() {
     try {
       setError(null);
       
-      // If sessionId provided and cached, use cache
-      if (sessionId && sessionCache[sessionId]) {
-        console.log('Using cached messages for session:', sessionId);
-        setChatHistory(sessionCache[sessionId]);
-        return;
-      }
-
-      // If no sessionId and we have a complete cache, use it
-      if (!sessionId && Object.keys(sessionCache).length > 0) {
-        console.log('Using complete cache');
-        const allMessages = Object.values(sessionCache).flat();
-        setChatHistory(allMessages);
-        return;
-      }
-
-      // Only fetch messages for specific session if provided
       const url = sessionId ? `/chat_history?session_id=${sessionId}` : '/chat_history';
-      const chatResponse = await fetch(url);
+      const response = await fetch(url);
+      const chatData = await response.json();
       
-      if (!chatResponse.ok) {
-        throw new Error(`Failed to fetch chat history: ${chatResponse.status}`);
-      }
+      // Sort messages by timestamp first
+      const sortedData = [...chatData].sort((a, b) => 
+        new Date(a.TIMESTAMP).getTime() - new Date(b.TIMESTAMP).getTime()
+      );
 
-      // Process chat history response
-      const chatData = await chatResponse.json();
-      const chatHistory = Array.isArray(chatData) ? chatData : [];
-      
-      // Update the grouping logic to respect session_id properly
-      const groupedBySession = chatHistory.reduce((acc: { [key: string]: ChatHistory[] }, msg) => {
-        // Ensure we use the actual session_id, not creating a default one
+      // Group by session maintaining order
+      const groupedBySession = sortedData.reduce((acc, msg) => {
         if (!msg.session_id) return acc;
-        
         if (!acc[msg.session_id]) {
           acc[msg.session_id] = [];
         }
@@ -59,10 +39,10 @@ function App() {
         return acc;
       }, {});
 
-      // Update cache with complete session data
+      // Update session cache
       setSessionCache(groupedBySession);
 
-      // Convert to Chat objects maintaining complete message history
+      // Convert to Chat objects with complete message history
       const convertedChats = Object.entries(groupedBySession).map(([sessionId, messages]) => ({
         id: sessionId,
         title: messages[0]?.message?.slice(0, 30) || 'Untitled Chat',
@@ -76,11 +56,14 @@ function App() {
         session_id: sessionId
       }));
 
-      console.log('Converted Chats:', convertedChats);
-
-      // Update states
-      setChatHistory(chatHistory);
       setChats(convertedChats);
+      
+      // Update chat history for current session
+      if (sessionId) {
+        setChatHistory(groupedBySession[sessionId] || []);
+      } else {
+        setChatHistory(sortedData);
+      }
       
     } catch (error) {
       console.error('Error fetching chat history:', error);
