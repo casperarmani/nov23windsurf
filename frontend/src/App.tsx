@@ -26,6 +26,9 @@ function App() {
       const chatData: ApiResponse<ChatHistory> = await chatResponse.json();
       const videoData: ApiResponse<VideoHistory> = await videoResponse.json();
       
+      console.log('Chat History Response:', chatData);
+      console.log('Video History Response:', videoData);
+      
       if (!chatData?.history || !Array.isArray(chatData.history)) {
         throw new Error('Invalid chat history data format');
       }

@@ -24,14 +24,16 @@ function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatCont
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    console.log('Initial Messages:', initialMessages);
+    console.log('Chat Messages State:', chatMessages);
+    setChatMessages(initialMessages);
+  }, [initialMessages]);
+
+  useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
-
-  useEffect(() => {
-    setChatMessages(initialMessages);
-  }, [initialMessages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
