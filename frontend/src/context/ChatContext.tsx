@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Message, ChatSession } from '../types';
+import { Message, ChatSession, ChatContextType } from '../types';
 
 interface ChatContextType {
   currentSession: ChatSession | null;
@@ -9,6 +9,7 @@ interface ChatContextType {
   createSession: () => Promise<void>;
   sendMessage: (formData: FormData) => Promise<void>;
   clearError: () => void;
+  setMessages: (messages: Message[]) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -23,7 +24,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch('/create_chat_session', {
+      const response = await fetch('/chat_sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,7 +94,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setError(null);
   }, []);
 
-  const value = {
+  const value: ChatContextType = {
     currentSession,
     messages,
     isLoading,
@@ -101,6 +102,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     createSession,
     sendMessage,
     clearError,
+    setMessages,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

@@ -12,6 +12,17 @@ export interface ChatSession {
   updated_at?: string;
 }
 
+export interface ChatContextType {
+  currentSession: ChatSession | null;
+  messages: Message[];
+  isLoading: boolean;
+  error: string | null;
+  createSession: () => Promise<void>;
+  sendMessage: (formData: FormData) => Promise<void>;
+  clearError: () => void;
+  setMessages: (messages: Message[]) => void;
+}
+
 export interface ChatHistory {
   id: string;
   user_id: string;
