@@ -23,20 +23,9 @@ from chatbot import Chatbot
 from database import Database, create_user, get_user_by_email, insert_chat_message, get_chat_history
 from database import insert_video_analysis, get_video_analysis_history, check_user_exists
 from dotenv import load_dotenv
-import uvicorn
 from supabase.client import create_client, Client
-import uuid
-import logging
-from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta
-import time
-import jwt
-from fastapi.responses import Response
 from redis_storage import RedisFileStorage
 from redis_manager import RedisManager, TaskType, TaskPriority
-import asyncio
-import secrets
-import httpx
 from session_config import (
     SESSION_LIFETIME,
     SESSION_REFRESH_THRESHOLD,
@@ -50,7 +39,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize environment variables
-from dotenv import load_dotenv
 load_dotenv()
 
 # Initialize Redis
@@ -68,8 +56,7 @@ supabase_key = os.environ.get("SUPABASE_ANON_KEY")
 if not supabase_url or not supabase_key:
     raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables")
 
-from supabase.client import create_client
-supabase = create_client(supabase_url, supabase_key)
+supabase: Client = create_client(supabase_url, supabase_key)
 
 # Initialize Database and Chatbot
 db = Database(supabase)
@@ -111,64 +98,6 @@ async def get_current_user(request: Request, return_none=False):
         if return_none:
             return None
         raise HTTPException(status_code=401, detail="Authentication error")
-
-
-import os
-from fastapi import FastAPI, File, Form, UploadFile, Depends, HTTPException, status, Request, BackgroundTasks
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-
-from fastapi.security import OAuth2AuthorizationCodeBearer
-from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.gzip import GZipMiddleware
-from starlette.requests import Request
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from chatbot import Chatbot
-from database import create_user, get_user_by_email, insert_chat_message, get_chat_history
-from database import insert_video_analysis, get_video_analysis_history, check_user_exists
-from dotenv import load_dotenv
-import uvicorn
-from supabase.client import create_client, Client
-import uuid
-import logging
-from typing import List, Dict, Optional, Any
-from datetime import datetime, timedelta
-import time
-import jwt
-from fastapi.responses import Response
-from redis_storage import RedisFileStorage
-from redis_manager import RedisManager, TaskType, TaskPriority
-import asyncio
-import secrets
-import httpx
-from session_config import (
-    SESSION_LIFETIME,
-    SESSION_REFRESH_THRESHOLD,
-    COOKIE_SECURE,
-    COOKIE_HTTPONLY,
-    COOKIE_SAMESITE,
-    SESSION_CLEANUP_INTERVAL
-)
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-load_dotenv()
-
-redis_url = os.getenv('REDIS_URL')
-if not redis_url:
-    raise ValueError("REDIS_URL environment variable is not set")
-
-redis_storage = RedisFileStorage(redis_url)
-redis_manager = RedisManager(redis_url)
-
-supabase_url = os.environ.get("SUPABASE_URL")
-supabase_key = os.environ.get("SUPABASE_ANON_KEY")
-
-if not supabase_url or not supabase_key:
-    raise ValueError("SUPABASE_URL or SUPABASE_ANON_KEY is missing from environment variables")
-
-supabase: Client = create_client(supabase_url, supabase_key)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -364,42 +293,6 @@ app.add_middleware(
     allowed_hosts=["*"]
 )
 
-# API routes will be defined here first
-
-chatbot = Chatbot()
-
-async def get_current_user(request: Request, return_none=False):
-    try:
-        session_id = request.cookies.get('session_id')
-        if not session_id:
-            if return_none:
-                return None
-            raise HTTPException(status_code=401, detail="Not authenticated")
-        
-        is_valid, session_data = redis_manager.validate_session(session_id)
-        if not is_valid or not session_data:
-            if return_none:
-                return None
-            raise HTTPException(status_code=401, detail="Invalid or expired session")
-
-        if not isinstance(session_data, dict) or 'id' not in session_data:
-            if return_none:
-                return None
-            raise HTTPException(status_code=401, detail="Invalid session data")
-
-        # Check if session needs refresh
-        current_time = time.time()
-        last_refresh = session_data.get('last_refresh', 0)
-        if current_time - last_refresh > SESSION_REFRESH_THRESHOLD:
-            await redis_manager.refresh_session(session_id)
-
-        return session_data
-    except Exception as e:
-        logger.error(f"Error in get_current_user: {str(e)}")
-        if return_none:
-            return None
-        raise HTTPException(status_code=401, detail="Authentication error")
-
 @app.post('/api/login')
 async def login_post(
     request: Request,
@@ -479,80 +372,36 @@ async def logout(request: Request):
 @app.get("/api/auth_status")
 async def auth_status(request: Request):
     try:
-        session_id = request.cookies.get('session_id')
-        if not session_id:
-            logger.info("Auth status check: No session ID found in cookies")
+        user = await get_current_user(request, return_none=True)
+        if not user:
+            logger.info("Auth status check: No authenticated user found")
             return JSONResponse(
-                status_code=status.HTTP_200_OK,
                 content={
                     "authenticated": False,
-                    "message": "No session found"
-                }
+                    "user": None,
+                    "message": "No authenticated user found"
+                },
+                status_code=status.HTTP_200_OK
             )
-
-        # First validate session data exists
-        is_valid, session_data = redis_manager.validate_session(session_id)
-        if not is_valid or not session_data:
-            logger.info(f"Auth status check: Invalid or expired session {session_id}")
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "authenticated": False,
-                    "message": "Session expired or invalid"
-                }
-            )
-
-        # Attempt to refresh the session
-        if not await redis_manager.refresh_session(session_id):
-            logger.warning(f"Auth status check: Failed to refresh session {session_id}")
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "authenticated": False,
-                    "message": "Session refresh failed"
-                }
-            )
-
-        # Get user data with current session
-        try:
-            user = await get_current_user(request, return_none=True)
-            if not user:
-                logger.warning(f"Auth status check: No user found for valid session {session_id}")
-                return JSONResponse(
-                    status_code=status.HTTP_200_OK,
-                    content={
-                        "authenticated": False,
-                        "message": "User not found"
-                    }
-                )
-
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "authenticated": True,
-                    "user": user,
-                    "session_status": "active"
-                }
-            )
-        except Exception as user_error:
-            logger.error(f"Auth status check: Error getting user data: {str(user_error)}")
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    "authenticated": False,
-                    "message": "Error retrieving user data"
-                }
-            )
-
-    except Exception as e:
-        logger.error(f"Auth status check: Unexpected error: {str(e)}")
+        
         return JSONResponse(
-            status_code=status.HTTP_200_OK,
+            content={
+                "authenticated": True,
+                "user": user,
+                "session_status": "active"
+            },
+            status_code=status.HTTP_200_OK
+        )
+    except Exception as e:
+        logger.error(f"Error in auth status: {str(e)}")
+        return JSONResponse(
             content={
                 "authenticated": False,
-                "error": "Internal server error",
+                "user": None,
+                "error": str(e),
                 "session_status": "error"
-            }
+            },
+            status_code=status.HTTP_200_OK
         )
 
 @app.get("/", response_class=HTMLResponse)
