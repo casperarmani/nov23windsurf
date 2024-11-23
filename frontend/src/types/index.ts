@@ -1,32 +1,3 @@
-export interface ChatSession {
-  id: string;
-  title: string;
-  created_at: string;
-  updated_at: string;
-  user_id: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  session_id: string;
-  message: string;
-  chat_type: 'user' | 'assistant';
-  timestamp: string;
-  user_id: string;
-}
-
-export interface ChatHistory {
-  messages: ChatMessage[];
-  sessions: ChatSession[];
-}
-
-export interface ChatContextType {
-  currentSession: ChatSession | null;
-  setCurrentSession: (session: ChatSession | null) => void;
-  messages: ChatMessage[];
-  sendMessage: (message: string) => Promise<void>;
-  createNewSession: () => Promise<void>;
-}
 export interface Message {
   type: 'user' | 'bot' | 'error';
   content: string;

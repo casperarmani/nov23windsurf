@@ -6,15 +6,16 @@ import { ChatWelcome } from './chat/ChatWelcome';
 import { ChatMessage } from './chat/ChatMessage';
 import { ChatInput } from './chat/ChatInput';
 import { Upload, X } from 'lucide-react';
-import { useChat } from '../context/ChatContext';
 
 interface ChatContainerProps {
-  onUpload?: (files: File[]) => void;
+  chatId?: string | null;
+  initialMessages?: Message[];
+  onMessageSent?: (messages: Message[], chatId: string) => void;
 }
 
-function ChatContainer({ onUpload }: ChatContainerProps) {
-  const { currentSession, messages, sendMessage } = useChat();
+function ChatContainer({ chatId, initialMessages = [], onMessageSent }: ChatContainerProps) {
   const [message, setMessage] = useState<string>('');
+  const [chatMessages, setChatMessages] = useState<Message[]>(initialMessages);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -22,33 +23,64 @@ function ChatContainer({ onUpload }: ChatContainerProps) {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [chatMessages]);
+
+  useEffect(() => {
+    setChatMessages(initialMessages);
+  }, [initialMessages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!message.trim() && files.length === 0) || isLoading || !currentSession) return;
+    if ((!message.trim() && files.length === 0) || isLoading) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      if (files.length > 0 && onUpload) {
-        onUpload(files);
-        setFiles([]);
+      const formData = new FormData();
+      formData.append('message', message.trim());
+      
+      files.forEach((file) => {
+        formData.append('videos', file);
+      });
+
+      const response = await fetch('/send_message', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      if (message.trim()) {
-        await sendMessage(message.trim());
-        setMessage('');
+      const data = await response.json();
+      
+      const updatedMessages: Message[] = [
+        ...chatMessages,
+        { type: 'user' as const, content: message.trim() },
+        { type: 'bot' as const, content: data.response }
+      ];
+      
+      setChatMessages(updatedMessages);
+      if (chatId && onMessageSent) {
+        onMessageSent(updatedMessages, chatId);
       }
+      
+      setMessage('');
+      setFiles([]);
     } catch (err) {
       console.error('Error:', err);
       setError('Failed to send message. Please try again.');
+      setChatMessages(prev => [
+        ...prev,
+        { type: 'user', content: message.trim() },
+        { type: 'error', content: 'Failed to send message. Please try again.' }
+      ]);
     } finally {
       setIsLoading(false);
     }
@@ -101,17 +133,12 @@ function ChatContainer({ onUpload }: ChatContainerProps) {
   return (
     <div className="flex flex-col h-[800px] rounded-3xl bg-black/10 backdrop-blur-xl border border-white/10">
       <ChatHeader />
-      {messages.length === 0 && <ChatWelcome />}
+      {chatMessages.length === 0 && <ChatWelcome />}
       
       <ScrollArea className="flex-grow px-6">
         <div className="space-y-6">
-          {messages.map((msg) => (
-            <ChatMessage 
-              key={msg.id} 
-              message={msg.message}
-              isUser={msg.chat_type === 'user'}
-              timestamp={msg.timestamp}
-            />
+          {chatMessages.map((msg, index) => (
+            <ChatMessage key={index} message={msg} />
           ))}
         </div>
       </ScrollArea>
