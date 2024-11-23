@@ -179,6 +179,22 @@ app = FastAPI(
     redoc_url="/api/redoc"
 )
 
+# Configure CORS
+origins = [
+    "http://localhost:5173",
+    "http://0.0.0.0:5173",
+    "http://localhost:3000",
+    "http://0.0.0.0:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Chat Session endpoints
 @app.post("/create_chat_session")
 async def create_chat_session(
@@ -341,20 +357,6 @@ async def startup_event():
             await asyncio.sleep(SESSION_CLEANUP_INTERVAL)
     
     asyncio.create_task(cleanup_sessions())
-
-# Configure CORS with specific origin
-origins = [
-    "http://localhost:5173",
-    "http://0.0.0.0:5173",
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
@@ -642,16 +644,13 @@ async def metrics():
 
 # Mount static files from React build after all API routes
 app.mount("/assets", StaticFiles(directory="static/react/assets"), name="assets")
-app.mount("/", StaticFiles(directory="static/react", html=True), name="spa")
+app.mount("/", StaticFiles(directory="static/react", html=True), name="spa-root")
 
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc: HTTPException):
     """Handle 404 errors by serving the React app"""
     # Only handle non-API routes
-    if request.url.path.startswith("/api") or request.url.path in [
-        "/login", "/logout", "/auth_status", 
-        "/chat_history", "/video_analysis_history", "/send_message"
-    ]:
+    if request.url.path.startswith("/api"):
         raise exc
     try:
         return FileResponse("static/react/index.html")

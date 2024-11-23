@@ -13,7 +13,7 @@ function App() {
 
   const fetchChatSessions = async () => {
     try {
-      const response = await fetch('/chat_sessions');
+      const response = await fetch('/api/chat_sessions');
       const data = await response.json();
       
       if (!response.ok) {
@@ -44,8 +44,8 @@ function App() {
     try {
       setError(null);
       const [chatResponse, videoResponse] = await Promise.all([
-        fetch('/chat_history' + (currentChatId ? `?session_id=${currentChatId}` : '')),
-        fetch('/video_analysis_history')
+        fetch('/api/chat_history' + (currentChatId ? `?session_id=${currentChatId}` : '')),
+        fetch('/api/video_analysis_history')
       ]);
 
       const chatData = await chatResponse.json();
