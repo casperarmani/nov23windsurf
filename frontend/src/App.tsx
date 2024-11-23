@@ -53,7 +53,8 @@ function App() {
         id: chatItem.id || crypto.randomUUID(),
         title: chatItem.message?.slice(0, 30) || 'Untitled Chat',
         messages: [{
-          type: chatItem.chat_type === 'text' ? 'user' : 'bot',
+          // Fix chat type conversion here
+          type: chatItem.chat_type === 'text' ? 'user' : chatItem.chat_type as 'user' | 'bot' | 'error',
           content: chatItem.message || ''
         }],
         timestamp: chatItem.TIMESTAMP,
@@ -92,14 +93,22 @@ function App() {
   };
 
   const handleMessageSent = (messages: Message[], chatId: string) => {
+    const chat = chats.find(c => c.id === chatId);
     setChats(prevChats => 
       prevChats.map(chat => 
         chat.id === chatId 
-          ? { ...chat, messages, title: messages[0]?.content.slice(0, 30) || chat.title }
+          ? { 
+              ...chat, 
+              messages: messages.map(msg => ({
+                ...msg,
+                type: msg.type === 'text' ? 'user' : msg.type // Ensure consistent type conversion
+              })),
+              title: messages[0]?.content.slice(0, 30) || chat.title 
+            }
           : chat
       )
     );
-    fetchHistories();
+    fetchHistories(chat?.session_id);
   };
 
   const currentChat = chats.find(chat => chat.id === currentChatId) || null;
